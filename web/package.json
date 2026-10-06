@@ -1,0 +1,40 @@
+{
+  "name": "car-agriclimate-portal",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev -p 3000",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "db:setup": "node scripts/localdb.mjs setup",
+    "db:start": "node scripts/localdb.mjs start",
+    "db:stop": "node scripts/localdb.mjs stop",
+    "db:status": "node scripts/localdb.mjs status",
+    "db:reset": "node scripts/localdb.mjs reset",
+    "db:user": "node scripts/localdb.mjs add-user",
+    "db:demo": "node scripts/localdb.mjs demo",
+    "db:migrate": "node scripts/localdb.mjs migrate"
+  },
+  "dependencies": {
+    "@supabase/ssr": "^0.12.7",
+    "@supabase/supabase-js": "^2.117.2",
+    "maplibre-gl": "^5.24.0",
+    "next": "^15.5.27",
+    "pg": "^8.23.1",
+    "react": "^19.3.0",
+    "react-dom": "^19.3.0",
+    "server-only": "^0.0.1",
+    "zod": "^4.6.5"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.4",
+    "@types/pg": "^8.23.1",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "typescript": "^5.9.3",
+    "vitest": "^5.0.3"
+  }
+}

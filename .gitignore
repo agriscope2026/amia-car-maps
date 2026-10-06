@@ -1,0 +1,16 @@
+# Python
+__pycache__/
+*.pyc
+.pytest_cache/
+worker/.venv/
+worker/outputs/
+# Node / Next
+web/node_modules/
+web/.next/
+web/.data/
+web/.env
+web/.env*.local
+web/next-env.d.ts
+web/*.tsbuildinfo
+web/public/demo/exports/
+.localdb/

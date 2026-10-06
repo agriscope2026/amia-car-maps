@@ -1,0 +1,204 @@
+{
+ "products": [
+  {
+   "id": "envi-2026-09",
+   "type": "envi",
+   "title": "El Niño Vulnerability Index – CAR",
+   "issued": "2026-09-15",
+   "period": {
+    "kind": "season",
+    "start": "2026-10-01",
+    "end": "2027-03-31",
+    "label": "October 2026 – March 2027"
+   },
+   "status": "published",
+   "version": 1,
+   "synthetic": false,
+   "layers": [
+    {
+     "id": "envi",
+     "label": "ENVI class"
+    }
+   ]
+  },
+  {
+   "id": "drought-2026-09",
+   "type": "drought",
+   "title": "Drought Forecast – CAR",
+   "issued": "2026-09-15",
+   "period": {
+    "kind": "season",
+    "start": "2026-10-01",
+    "end": "2027-03-31",
+    "label": "October 2026 – March 2027",
+    "months": [
+     "2026-10",
+     "2026-11",
+     "2026-12",
+     "2027-01",
+     "2027-02",
+     "2027-03"
+    ]
+   },
+   "status": "published",
+   "version": 1,
+   "synthetic": false,
+   "layers": [
+    {
+     "id": "m_2026-10",
+     "label": "October 2026"
+    },
+    {
+     "id": "m_2026-11",
+     "label": "November 2026"
+    },
+    {
+     "id": "m_2026-12",
+     "label": "December 2026"
+    },
+    {
+     "id": "m_2027-01",
+     "label": "January 2027"
+    },
+    {
+     "id": "m_2027-02",
+     "label": "February 2027"
+    },
+    {
+     "id": "m_2027-03",
+     "label": "March 2027"
+    }
+   ]
+  },
+  {
+   "id": "rainfall_dekad-2026-10-05",
+   "type": "rainfall_dekad",
+   "title": "10-Day Rainfall Forecast – CAR",
+   "issued": "2026-10-05",
+   "period": {
+    "kind": "dekad",
+    "start": "2026-10-05",
+    "end": "2026-10-14",
+    "label": "October 5–14, 2026",
+    "days": [
+     "2026-10-05",
+     "2026-10-06",
+     "2026-10-07",
+     "2026-10-08",
+     "2026-10-09",
+     "2026-10-10",
+     "2026-10-11",
+     "2026-10-12",
+     "2026-10-13",
+     "2026-10-14"
+    ]
+   },
+   "status": "published",
+   "version": 1,
+   "synthetic": false,
+   "layers": [
+    {
+     "id": "d_2026-10-05",
+     "label": "October 5"
+    },
+    {
+     "id": "d_2026-10-06",
+     "label": "October 6"
+    },
+    {
+     "id": "d_2026-10-07",
+     "label": "October 7"
+    },
+    {
+     "id": "d_2026-10-08",
+     "label": "October 8"
+    },
+    {
+     "id": "d_2026-10-09",
+     "label": "October 9"
+    },
+    {
+     "id": "d_2026-10-10",
+     "label": "October 10"
+    },
+    {
+     "id": "d_2026-10-11",
+     "label": "October 11"
+    },
+    {
+     "id": "d_2026-10-12",
+     "label": "October 12"
+    },
+    {
+     "id": "d_2026-10-13",
+     "label": "October 13"
+    },
+    {
+     "id": "d_2026-10-14",
+     "label": "October 14"
+    },
+    {
+     "id": "total",
+     "label": "10-day total (October 5–14, 2026)"
+    }
+   ]
+  },
+  {
+   "id": "rainfall_seasonal-2026-10",
+   "type": "rainfall_seasonal",
+   "title": "Seasonal Rainfall Outlook – CAR",
+   "issued": "2026-09-30",
+   "period": {
+    "kind": "season",
+    "start": "2026-10-01",
+    "end": "2027-03-31",
+    "label": "October 2026 – March 2027",
+    "months": [
+     "2026-10",
+     "2026-11",
+     "2026-12",
+     "2027-01",
+     "2027-02",
+     "2027-03"
+    ]
+   },
+   "status": "published",
+   "version": 1,
+   "synthetic": true,
+   "layers": [
+    {
+     "id": "m_2026-10",
+     "label": "October 2026"
+    },
+    {
+     "id": "m_2026-11",
+     "label": "November 2026"
+    },
+    {
+     "id": "m_2026-12",
+     "label": "December 2026"
+    },
+    {
+     "id": "m_2027-01",
+     "label": "January 2027"
+    },
+    {
+     "id": "m_2027-02",
+     "label": "February 2027"
+    },
+    {
+     "id": "m_2027-03",
+     "label": "March 2027"
+    },
+    {
+     "id": "season_total",
+     "label": "Season total (October 2026 – March 2027)"
+    },
+    {
+     "id": "pct_normal",
+     "label": "% of normal (October 2026 – March 2027)"
+    }
+   ]
+  }
+ ]
+}
