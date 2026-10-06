@@ -128,6 +128,8 @@ cd web && E2E_EMAIL=admin@example.com E2E_PASSWORD=admin-local-123 node scripts/
 | `WORKER_URL`, `WORKER_TOKEN` | yes | Private render worker URL and shared secret |
 | `SESSION_SECRET` | yes | 32+ characters; signs preview payloads (and local sessions) |
 | `CRON_SECRET` | production | Protects `/api/cron/rainfall-feed` (Vercel Cron sends it) |
+| `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY` | optional | Cloudflare R2 file storage instead of Supabase Storage (uploads, exports) |
+| `R2_BUCKET`, `R2_PUBLIC_BUCKET`, `R2_PUBLIC_URL` | with R2 | Private bucket (default `amia-car-maps`), public bucket (default `amia-car-maps-public`, public access on) and its public URL |
 | `DATABASE_URL` | local / self-hosted | PostgreSQL + PostGIS instead of Supabase (e.g. the local dev database) |
 | `DEV_ADMIN_EMAIL`, `DEV_ADMIN_PASSWORD` | no-database mode only | Single admin login without any database |
 
@@ -137,6 +139,7 @@ cd web && E2E_EMAIL=admin@example.com E2E_PASSWORD=admin-local-123 node scripts/
 |---|---|---|
 | `WORKER_TOKEN` | yes | Same value as in web |
 | `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY` | production | Upload exports to the private `exports` bucket |
+| `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_BUCKET` | optional | Upload exports to Cloudflare R2 (`exports/<version>/…`) instead of Supabase Storage |
 | `EXPORTS_BUCKET` | no | Default `exports` |
 | `OUTPUT_DIR` | no | Working folder for jobs (default `worker/outputs`) |
 | `RAINFALL_FEED_URL` | no | Default `https://cordillera-weather.onrender.com/api/cordillera/full/` |
@@ -154,7 +157,7 @@ cd web && E2E_EMAIL=admin@example.com E2E_PASSWORD=admin-local-123 node scripts/
    - Create the staff users in Auth.
    - For each user, insert a `profiles` row with role `editor` or `admin`.
 2. **Worker (container host).**
-   - Build the image: `docker build -t car-agriclimate-worker worker/`.
+   - Build the image: `docker build -t amia-car-maps-worker worker/`.
    - Run it on Cloud Run, Render, Fly or a VPS with `WORKER_TOKEN`, `SUPABASE_URL` and
      `SUPABASE_SERVICE_ROLE_KEY`.
    - Give it at least 2 GB of RAM and keep it private (only the web app calls it).

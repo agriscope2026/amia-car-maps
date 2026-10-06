@@ -3,6 +3,7 @@ import crypto from "crypto";
 import { promises as fs } from "fs";
 import path from "path";
 import { HttpError } from "./auth";
+import { R2_BUCKET, r2Configured, r2Get, r2Put } from "./r2";
 import { supabaseAdmin, supabaseConfigured } from "./supabase";
 
 /** Client for the private render worker + storage of uploaded input files. */
@@ -73,7 +74,9 @@ export async function storeUploads(uploadId: string, files: { field: string; fil
     const buf = Buffer.from(await file.arrayBuffer());
     const rel = `${uploadId}/${field}__${safeName(file.name)}`;
     const sha256 = crypto.createHash("sha256").update(buf).digest("hex");
-    if (supabaseConfigured()) {
+    if (r2Configured()) {
+      await r2Put(R2_BUCKET, `uploads/${rel}`, buf, file.type || undefined);
+    } else if (supabaseConfigured()) {
       const { error } = await supabaseAdmin().storage.from("uploads").upload(rel, buf, { upsert: true, contentType: file.type || undefined });
       if (error) throw error;
     } else {
@@ -87,6 +90,7 @@ export async function storeUploads(uploadId: string, files: { field: string; fil
 }
 
 export async function loadUpload(f: StoredFile): Promise<Blob> {
+  if (r2Configured()) return r2Get(R2_BUCKET, `uploads/${f.path}`);
   if (supabaseConfigured()) {
     const { data, error } = await supabaseAdmin().storage.from("uploads").download(f.path);
     if (error) throw error;

@@ -3,6 +3,7 @@ import { promises as fs } from "fs";
 import path from "path";
 import type { Download } from "@/lib/types";
 import { LOCAL_EXPORTS_DIR } from "./repo";
+import { R2_BUCKET, R2_PUBLIC_BUCKET, r2Configured, r2Copy, r2PublicUrl } from "./r2";
 import { supabaseAdmin, supabaseConfigured } from "./supabase";
 import { workerRaw } from "./worker";
 
@@ -53,8 +54,13 @@ export const localExportUrl = (versionId: string) => (file: string) => `/api/exp
 
 /** Supabase mode: on publish, copy the exports from the private bucket to the public one. */
 export async function publishSupabaseExports(versionId: string, manifest: any): Promise<Download[]> {
-  const sb = supabaseAdmin();
   const names = manifestFiles(manifest);
+  if (r2Configured()) {
+    // Cloudflare R2: server-side copy from the private bucket to the public one
+    for (const n of names) await r2Copy(R2_BUCKET, `exports/${versionId}/${n}`, R2_PUBLIC_BUCKET, `${versionId}/${n}`);
+    return downloadsFromManifest(manifest, (f) => r2PublicUrl(`${versionId}/${f}`));
+  }
+  const sb = supabaseAdmin();
   for (const n of names) {
     const { data, error } = await sb.storage.from("exports").download(`${versionId}/${n}`);
     if (error) throw error;

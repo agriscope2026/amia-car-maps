@@ -1,4 +1,5 @@
 import "server-only";
+import { R2_BUCKET, R2_PUBLIC_BUCKET, r2Configured, r2DeletePrefix } from "../r2";
 import type { CropsLayer, Payload } from "@/lib/types";
 import { supabaseAdmin, supabasePublic } from "../supabase";
 import { slugFor, UUID_RE, valueRows, type Actor, type Repo, type VersionRecord } from "./types";
@@ -168,6 +169,11 @@ export const supabaseRepo: Repo = {
     const { count } = await sb.from("product_versions").select("id", { count: "exact", head: true }).eq("product_id", v.product_id);
     if (!count) await sb.from("products").delete().eq("id", v.product_id);
     // export files of the version
+    if (r2Configured()) {
+      await r2DeletePrefix(R2_BUCKET, `exports/${id}/`);
+      await r2DeletePrefix(R2_PUBLIC_BUCKET, `${id}/`);
+      return;
+    }
     for (const bucket of ["exports", "public-exports"]) {
       const { data } = await sb.storage.from(bucket).list(id, { limit: 1000 });
       if (data?.length) await sb.storage.from(bucket).remove(data.map((f) => `${id}/${f.name}`));

@@ -2,6 +2,7 @@ fastapi>=0.115
 uvicorn[standard]>=0.30
 python-multipart>=0.0.9
 httpx>=0.27
+boto3>=1.34          # Cloudflare R2 (S3-compatible) export storage
 pandas>=2.2
 numpy>=1.26
 openpyxl>=3.1

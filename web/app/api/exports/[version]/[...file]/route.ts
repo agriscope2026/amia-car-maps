@@ -2,6 +2,7 @@ import { promises as fs } from "fs";
 import path from "path";
 import { currentUser, errorResponse, HttpError } from "@/lib/server/auth";
 import { getVersion, LOCAL_EXPORTS_DIR } from "@/lib/server/repo";
+import { R2_BUCKET, r2Configured, r2SignedUrl } from "@/lib/server/r2";
 import { supabaseAdmin, supabaseConfigured } from "@/lib/server/supabase";
 
 const TYPES: Record<string, string> = {
@@ -23,6 +24,7 @@ export async function GET(_req: Request, ctx: { params: Promise<{ version: strin
     const v = await getVersion(version);
     if (!v) throw new HttpError(404, "Not found");
     if (v.status !== "published" && !(await currentUser())) throw new HttpError(401, "Sign in to download draft exports.");
+    if (r2Configured()) return Response.redirect(await r2SignedUrl(R2_BUCKET, `exports/${version}/${name}`, 300, name), 302);
     if (supabaseConfigured()) {
       const { data, error } = await supabaseAdmin().storage.from("exports").createSignedUrl(`${version}/${name}`, 300, { download: name });
       if (error || !data) throw new HttpError(404, "File not found");

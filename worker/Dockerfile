@@ -1,5 +1,5 @@
 # Render worker: FastAPI + headless PyQGIS (QGIS LTR) with the matplotlib fallback.
-# Build:  docker build -t car-agriclimate-worker .     (context = worker/)
+# Build:  docker build -t amia-car-maps-worker .     (context = worker/)
 # Run:    docker run -p 8001:8001 -e WORKER_TOKEN=... -e SUPABASE_URL=... -e SUPABASE_SERVICE_ROLE_KEY=... <image>
 ARG QGIS_IMAGE=qgis/qgis:ltr
 FROM ${QGIS_IMAGE}
