@@ -27,7 +27,7 @@ Administrative Region (DA-RFO-CAR), AMIA Program. It has two parts:
 
 ```
 web/        Next.js 15 + TypeScript + MapLibre GL – dashboard, admin workspace, API routes (deploy: Vercel)
-worker/     Python FastAPI render worker – validation, products, exports (deploy: Docker with QGIS LTR)
+worker/     Python FastAPI render worker – validation, products, exports (deploy: Docker, python:3.13-slim)
   agriclimate/envi/     the ENVI prototype (Elnino-vul-index), ported unchanged apart from paths
   agriclimate/products/ ENVI, 10-day rainfall, seasonal rainfall, drought, crops and irrigation layers
   agriclimate/rainfall_feed.py   10-day rainfall feed (Cordillera weather API)
@@ -161,7 +161,7 @@ cd web && E2E_EMAIL=admin@example.com E2E_PASSWORD=admin-local-123 node scripts/
    - Run it on Cloud Run, Render, Fly or a VPS with `WORKER_TOKEN`, `SUPABASE_URL` and
      `SUPABASE_SERVICE_ROLE_KEY`.
    - Give it at least 2 GB of RAM and keep it private (only the web app calls it).
-   - The image sets `QT_QPA_PLATFORM=offscreen` and `QT_QPA_FONTDIR` and installs Montserrat for PyQGIS.
+   - The image is `python:3.13-slim` with Montserrat installed; maps are drawn with matplotlib (QGIS is not needed).
 3. **Web (Vercel).**
    - Import the repository with **Root Directory = `web`** and set the variables above.
    - `vercel.json` schedules the daily rainfall-feed job (22:00 UTC = 06:00 Asia/Manila).

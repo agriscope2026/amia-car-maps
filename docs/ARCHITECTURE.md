@@ -20,7 +20,7 @@ until DA-RFO-CAR confirms them), and the milestone plan with its current status.
                  │ private HTTPS + WORKER_TOKEN                               │ service role
                  ▼                                                            │ (uploads exports)
  ┌────────────────────────────────────────────────────┐                       │
- │ worker/  Python FastAPI in Docker (QGIS LTR image) │───────────────────────┘
+ │ worker/  Python FastAPI in Docker (python:3.13-slim)│───────────────────────┘
  │  • validation + name matching (ported prototype)   │
  │  • ENVI, 10-day rainfall, seasonal, drought        │──▶ Cordillera weather API (10-day rainfall feed)
  │  • exports: PNG 400 dpi, PDF, slide, poster, XLSX,  │──▶ DroughtCaster source (when confirmed)
