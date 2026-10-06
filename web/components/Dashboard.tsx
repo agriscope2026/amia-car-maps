@@ -127,7 +127,7 @@ export default function Dashboard({ geo }: { geo: Gazetteer }) {
           <img src="/logos/amia.webp" alt="AMIA – Adaptation and Mitigation Initiative in Agriculture" width={44} height={44} />
         </div>
         <div className="titles">
-          <h1>{payload?.texts.title ?? "CAR Agri-Climate Portal"}</h1>
+          <h1>{payload?.texts.title ?? "AMIA CAR MAPS"}</h1>
           <p>{payload ? `${payload.period.label} · as of ${fmtDate(payload.issued)}` : "DA-RFO-CAR · AMIA Program"}</p>
         </div>
         <nav className="toplinks">

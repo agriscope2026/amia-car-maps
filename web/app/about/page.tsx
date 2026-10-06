@@ -1,6 +1,6 @@
 import Link from "next/link";
 
-export const metadata = { title: "About & methodology – CAR Agri-Climate Portal" };
+export const metadata = { title: "About & methodology – AMIA CAR MAPS" };
 
 export default function About() {
   return (
@@ -10,7 +10,7 @@ export default function About() {
       </p>
       <h1>About the maps &amp; methodology</h1>
       <p className="muted">
-        The CAR Agri-Climate Portal publishes climate-risk maps for the 77 municipalities and 6 provinces of the Cordillera
+        AMIA CAR MAPS publishes climate-risk maps for the 77 municipalities and 6 provinces of the Cordillera
         Administrative Region. It is run by the Department of Agriculture – Regional Field Office, Cordillera Administrative
         Region (DA-RFO-CAR), Adaptation and Mitigation Initiative in Agriculture (AMIA) Program. Only products approved by a
         DA-RFO-CAR administrator appear here. Every map lists its validity period, its “as of” date and its sources.

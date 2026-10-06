@@ -2,7 +2,7 @@ import type { Metadata, Viewport } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "CAR Agri-Climate Portal",
+  title: "AMIA CAR MAPS",
   description:
     "El Niño vulnerability, rainfall and drought forecast maps for the Cordillera Administrative Region – DA-RFO-CAR AMIA Program.",
   icons: { icon: "/logos/da-car.png" },
