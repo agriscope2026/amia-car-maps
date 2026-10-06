@@ -13,6 +13,7 @@ import { Downloads } from "./Downloads";
 import PhotoMode, { photosOf } from "./PhotoMode";
 import { FarmAdvice } from "./FarmAdvice";
 import AreaDialog from "./AreaDialog";
+import GuideTour, { guideSeen, type GuideStep } from "./GuideTour";
 
 const MapView = dynamic(() => import("./MapView"), { ssr: false, loading: () => <div className="map map-loading">Loading map…</div> });
 
@@ -29,10 +30,14 @@ export default function Dashboard({ geo }: { geo: Gazetteer }) {
   const [playing, setPlaying] = useState(false);
   const [copied, setCopied] = useState(false);
   const [area, setArea] = useState<string | null>(null);
+  const [tour, setTour] = useState(false);
+  const [legendOpen, setLegendOpen] = useState(true);
   const initial = useRef<ViewState | null>(null);
 
   // initial state from the URL (share links)
   useEffect(() => {
+    // small screens: start with the on-map legend folded so it doesn't cover the map
+    if (window.matchMedia("(max-width: 820px), (max-height: 520px)").matches) setLegendOpen(false);
     const s = parseState(new URLSearchParams(window.location.search));
     initial.current = s;
     setState(s);
@@ -78,6 +83,44 @@ export default function Dashboard({ geo }: { geo: Gazetteer }) {
     if (crops && !state.cropSel?.length) setState((s) => ({ ...s, cropSel: [crops.crops.includes("Rice") ? "Rice" : crops.crops[0]] }));
   }, [crops, state.cropSel]);
 
+  // first visit: start the guide once the map and its panels are on the page (not over a shared photo-mode link)
+  const ready = catalog !== null && (payload !== null || error !== null || catalog.length === 0);
+  useEffect(() => {
+    if (!ready || guideSeen() || initial.current?.photo) return;
+    const t = setTimeout(() => setTour(true), 600);
+    return () => clearTimeout(t);
+  }, [ready]);
+  // example municipality for the guide: one in the top class of the map on screen
+  const demoArea = useMemo(() => {
+    if (!layer) return null;
+    const order = layer.legend.classes.map((c) => c.label);
+    const keys = Object.keys(layer.values).filter((k) => order.includes(layer.values[k]?.class));
+    keys.sort((a, b) => order.indexOf(layer.values[b].class) - order.indexOf(layer.values[a].class));
+    return keys[0] ?? null;
+  }, [layer]);
+  const demoTargets = demoArea ? ["area-value", ...(payload?.texts.recommendations ? ["area-recs"] : [])] : [];
+  const onTourStep = useCallback((s: GuideStep, inPanel: boolean) => {
+    setSheetOpen(inPanel);
+    setArea(s.demo ? demoArea : null);
+  }, [demoArea]);
+  const closeTour = useCallback(() => {
+    setTour(false);
+    setSheetOpen(false);
+    setArea(null);
+  }, []);
+  const openTour = () => {
+    setArea(null);
+    set({ photo: false });
+    setTour(true);
+  };
+
+  // phones: keep the selected map-type chip in view (the chip row scrolls sideways)
+  useEffect(() => {
+    const row = document.querySelector<HTMLElement>(".type-chips");
+    const on = row?.querySelector<HTMLElement>(".on");
+    if (row && on) row.scrollTo({ left: on.offsetLeft - row.clientWidth / 2 + on.offsetWidth / 2, behavior: "smooth" });
+  }, [type, catalog]);
+
   // keep the URL in sync (share links)
   useEffect(() => {
     if (!catalog) return;
@@ -118,6 +161,26 @@ export default function Dashboard({ geo }: { geo: Gazetteer }) {
 
   const typeLabel = PRODUCT_TYPES.find((t) => t.id === type)?.label ?? "";
 
+  // map-type buttons: in the panel, and on phones also as chips over the map so they're always in reach
+  const typeButtons = PRODUCT_TYPES.map((t) => {
+    const has = available.some((a) => a.id === t.id);
+    return (
+      <button
+        key={t.id}
+        role="radio"
+        aria-checked={type === t.id}
+        disabled={!has}
+        className={type === t.id ? "on" : ""}
+        onClick={() => {
+          setPlaying(false);
+          set({ type: t.id, product: undefined, layer: undefined });
+        }}
+      >
+        {t.short}
+      </button>
+    );
+  });
+
   return (
     <div className={`app theme-${payload?.type ?? "none"}`}>
       <header className="topbar">
@@ -130,13 +193,20 @@ export default function Dashboard({ geo }: { geo: Gazetteer }) {
           <h1>{payload?.texts.title ?? "AMIA CAR MAPS"}</h1>
           <p>{payload ? `${payload.period.label} · as of ${fmtDate(payload.issued)}` : "DA-RFO-CAR · AMIA Program"}</p>
         </div>
+        <button className="guide-btn" data-tour="help" onClick={openTour} aria-label="How to use this site">
+          <span aria-hidden>?</span>
+          <span className="guide-label">How to use</span>
+        </button>
         <nav className="toplinks">
           <Link href="/about">About &amp; methodology</Link>
         </nav>
       </header>
 
       <main className="body">
-        <section className="mapwrap" aria-label="Map">
+        <section className="mapwrap" aria-label="Map" data-tour="map">
+          <div className="type-chips" role="radiogroup" aria-label="Map type" data-tour="maptype">
+            {typeButtons}
+          </div>
           {payload?.synthetic && (
             <div className="banner" role="note">
               Demo data – synthetic values for testing, not an official forecast.
@@ -159,13 +229,16 @@ export default function Dashboard({ geo }: { geo: Gazetteer }) {
             onViewChange={onView}
           />
           {photos.length > 0 && (
-            <button className="photo-open" onClick={() => set({ photo: true })} title="See the finished map images with the recommendations">
-              🖼 Photo mode{payload?.type === "envi" ? " – presentation & recommendations" : ""}
+            <button className="photo-open" data-tour="photo" onClick={() => set({ photo: true })} title="See the finished map images with the recommendations">
+              🖼 Photo mode{payload?.type === "envi" && <span className="photo-open-more"> – presentation &amp; recommendations</span>}
             </button>
           )}
           {layer && (
-            <div className="map-legend" aria-hidden={sheetOpen}>
-              <Legend layer={layer} compact />
+            <div className={`map-legend ${legendOpen ? "" : "folded"}`} aria-hidden={sheetOpen}>
+              <button className="map-legend-toggle" onClick={() => setLegendOpen((o) => !o)} aria-expanded={legendOpen}>
+                {legendOpen ? "Hide legend ▾" : "Legend ▸"}
+              </button>
+              {legendOpen && <Legend layer={layer} compact />}
             </div>
           )}
         </section>
@@ -179,32 +252,15 @@ export default function Dashboard({ geo }: { geo: Gazetteer }) {
           {error && <p className="error" role="alert">{error}</p>}
           {catalog && !catalog.length && <p className="muted">No products have been published yet.</p>}
 
-          <fieldset className="group">
+          <fieldset className="group" data-tour="maptype">
             <legend>Map type</legend>
             <div className="seg" role="radiogroup">
-              {PRODUCT_TYPES.map((t) => {
-                const has = available.some((a) => a.id === t.id);
-                return (
-                  <button
-                    key={t.id}
-                    role="radio"
-                    aria-checked={type === t.id}
-                    disabled={!has}
-                    className={type === t.id ? "on" : ""}
-                    onClick={() => {
-                      setPlaying(false);
-                      set({ type: t.id, product: undefined, layer: undefined });
-                    }}
-                  >
-                    {t.short}
-                  </button>
-                );
-              })}
+              {typeButtons}
             </div>
           </fieldset>
 
           {issues.length > 0 && (
-            <div className="group">
+            <div className="group" data-tour="period">
               <label htmlFor="issue">Issue / period</label>
               <select
                 id="issue"
@@ -311,7 +367,7 @@ export default function Dashboard({ geo }: { geo: Gazetteer }) {
           )}
 
           {payload?.downloads && payload.downloads.length > 0 && (
-            <div className="group">
+            <div className="group" data-tour="downloads">
               <h2>Downloads</h2>
               <Downloads items={payload.downloads} currentLayer={layer?.id} />
             </div>
@@ -329,7 +385,7 @@ export default function Dashboard({ geo }: { geo: Gazetteer }) {
               </div>
               <FarmAdvice texts={payload.texts} />
               {payload.texts.recommendations && (
-                <div className="group" id="recommendations">
+                <div className="group" id="recommendations" data-tour="recs">
                   <h2>Agricultural recommendations</h2>
                   <div className="prose recs">
                     {payload.texts.recommendations.split("\n").map((line, i) => (
@@ -365,6 +421,7 @@ export default function Dashboard({ geo }: { geo: Gazetteer }) {
           onClose={() => setArea(null)}
         />
       )}
+      {tour && <GuideTour onStep={onTourStep} onClose={closeTour} demoTargets={demoTargets} />}
       {state.photo && payload && (
         <PhotoMode payload={payload} layerId={layer?.id} onLayer={(id) => set({ layer: id })} onClose={() => set({ photo: false })} />
       )}

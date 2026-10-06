@@ -89,7 +89,7 @@ export default function AreaDialog({ areaKey, geo, payload, layer, crops, onLaye
 
         <div className="dlg-body">
           {payload && layer && (
-            <section className="dlg-card dlg-value">
+            <section className="dlg-card dlg-value" data-tour="area-value">
               <div className="dlg-kicker">
                 {payload.texts.title} · {layer.label}
               </div>
@@ -174,7 +174,7 @@ export default function AreaDialog({ areaKey, geo, payload, layer, crops, onLaye
           )}
 
           {recs && (
-            <section className="dlg-card">
+            <section className="dlg-card" data-tour="area-recs">
               <h3>Recommendations</h3>
               {local.length > 0 && (
                 <div className="dlg-local">
