@@ -2,7 +2,8 @@ import "server-only";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 
 const URL = process.env.NEXT_PUBLIC_SUPABASE_URL ?? "";
-const ANON = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? "";
+// anon key, or the new-style publishable key (sb_publishable_…) – either works with supabase-js
+export const ANON = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY || "";
 const SERVICE = process.env.SUPABASE_SERVICE_ROLE_KEY ?? "";
 
 export const supabaseConfigured = () => Boolean(URL && ANON && SERVICE);

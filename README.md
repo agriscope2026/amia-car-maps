@@ -123,7 +123,7 @@ cd web && E2E_EMAIL=admin@example.com E2E_PASSWORD=admin-local-123 node scripts/
 
 | Variable | Needed | Purpose |
 |---|---|---|
-| `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY` | production | Supabase project (public read through RLS) |
+| `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY` (or `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`) | production | Supabase project (public read through RLS) |
 | `SUPABASE_SERVICE_ROLE_KEY` | production | Server-only writes after the role check. Never exposed to the browser. |
 | `WORKER_URL`, `WORKER_TOKEN` | yes | Private render worker URL and shared secret |
 | `SESSION_SECRET` | yes | 32+ characters; signs preview payloads (and local sessions) |
@@ -148,7 +148,8 @@ cd web && E2E_EMAIL=admin@example.com E2E_PASSWORD=admin-local-123 node scripts/
 
 1. **Database (Supabase).**
    - Create a project.
-   - Run `supabase/migrations/0001_init.sql`, then `supabase/seed.sql` (SQL editor, or `supabase db push`).
+   - Run the migrations in order (`supabase/migrations/0001_init.sql`, `0002_crop_colors.sql`), then
+     `supabase/seed.sql` (SQL editor, or `supabase db push`).
      PostGIS must be enabled.
    - Create the staff users in Auth.
    - For each user, insert a `profiles` row with role `editor` or `admin`.

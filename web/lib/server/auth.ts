@@ -2,7 +2,7 @@ import "server-only";
 import crypto from "crypto";
 import { cookies, headers } from "next/headers";
 import { createServerClient } from "@supabase/ssr";
-import { supabaseAdmin, supabaseConfigured } from "./supabase";
+import { ANON, supabaseAdmin, supabaseConfigured } from "./supabase";
 import { backendKind } from "./backend";
 import { q } from "./db";
 import { verifyPassword } from "./password";
@@ -101,7 +101,7 @@ async function sessionUser(): Promise<User | null> {
 
 export async function supabaseServer() {
   const store = await cookies();
-  return createServerClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!, {
+  return createServerClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, ANON, {
     cookies: {
       getAll: () => store.getAll(),
       setAll: (list) => {
