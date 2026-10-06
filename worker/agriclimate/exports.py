@@ -9,6 +9,7 @@ Optional: ``settings["crop_overlay"]`` draws standing crops as proportional circ
 """
 from __future__ import annotations
 
+import gc
 import json
 import math
 import shutil
@@ -35,9 +36,10 @@ def layer_tag(layer_id: str) -> str:
 
 def _preview_jpg(png: Path, path: Path, width: int = PREVIEW_WIDTH) -> Path:
     from PIL import Image
-    im = Image.open(png).convert("RGB")
-    im.thumbnail((width, width), Image.LANCZOS)
-    im.save(path, "JPEG", quality=PREVIEW_QUALITY, optimize=True, progressive=True, subsampling=0)
+    with Image.open(png) as im:
+        im.thumbnail((width, width), Image.LANCZOS, reducing_gap=3.0)   # shrink first, then convert (less memory)
+        im.convert("RGB").save(path, "JPEG", quality=PREVIEW_QUALITY, optimize=True, progressive=True, subsampling=0)
+    gc.collect()
     return path
 
 
@@ -57,13 +59,16 @@ def _map_only(payload: dict, layer: dict, path: Path) -> Path:
         mapinfo.draw_crop_legend_in_map(ax, payload["crop_overlay"])
     fig.savefig(path, dpi=450, transparent=True)
     plt.close(fig)
+    gc.collect()
     return path
 
 
 def _pdf(png: Path, path: Path, dpi: float) -> Path:
     """High-resolution PDF of an image (full resolution kept)."""
     from PIL import Image
-    Image.open(png).convert("RGB").save(path, "PDF", resolution=dpi)
+    with Image.open(png) as im:
+        im.convert("RGB").save(path, "PDF", resolution=dpi)
+    gc.collect()
     return path
 
 
@@ -74,13 +79,18 @@ def _envi_presentation(payload: dict, files: dict, settings: dict, map_only: Pat
     from .products.envi_product import compute
     _, _, meta, _ = compute(files, settings)
     recs = payload.get("texts", {}).get("recommendations", "")
-    pres = presentation.build_slide(meta, map_only, out_dir / "envi_presentation_5760x3240.png", scale=3.0,
-                                    recommendations=recs)
-    poster = presentation.build_poster(meta, map_only, out_dir / "envi_poster_A4.png", recommendations=recs, scale=3.0)
-    return {"presentation": pres, "presentation_pdf": _pdf(pres, out_dir / "envi_presentation.pdf", 288),
-            "presentation_web": _preview_jpg(pres, out_dir / "envi_presentation_web.jpg", 3840),
-            "poster": poster, "poster_pdf": _pdf(poster, out_dir / "envi_poster_A4.pdf", 450),
-            "poster_web": _preview_jpg(poster, out_dir / "envi_poster_A4_web.jpg", 2480)}
+    # one image at a time (each is ~75 MB in memory), so the worker fits a small (512 MB) instance
+    out = {"presentation": presentation.build_slide(meta, map_only, out_dir / "envi_presentation_5760x3240.png",
+                                                    scale=3.0, recommendations=recs)}
+    gc.collect()
+    out["presentation_pdf"] = _pdf(out["presentation"], out_dir / "envi_presentation.pdf", 288)
+    out["presentation_web"] = _preview_jpg(out["presentation"], out_dir / "envi_presentation_web.jpg", 3840)
+    out["poster"] = presentation.build_poster(meta, map_only, out_dir / "envi_poster_A4.png", recommendations=recs,
+                                              scale=3.0)
+    gc.collect()
+    out["poster_pdf"] = _pdf(out["poster"], out_dir / "envi_poster_A4.pdf", 450)
+    out["poster_web"] = _preview_jpg(out["poster"], out_dir / "envi_poster_A4_web.jpg", 2480)
+    return out
 
 
 def export_product(payload: dict, out_dir: Path, settings: dict | None = None, files: dict | None = None,
@@ -100,11 +110,11 @@ def export_product(payload: dict, out_dir: Path, settings: dict | None = None, f
     for i, lyr in enumerate(payload["layers"]):
         progress("map", "running", f"Rendering map {i + 1}/{n}: {lyr['label']}")
         name = f"{stem}_map_{lyr['id']}"
-        r = render.render_layer(payload, lyr, out_dir, name)
+        r = render.render_layer(payload, lyr, out_dir, name, preview=out_dir / f"{name}_preview.jpg")
         reports[lyr["id"]] = r["label_report"]
         manifest["maps"].append({"layer": lyr["id"], "label": lyr["label"], "alt": r["alt"], "png": r["png"].name,
                                  "pdf": r["pdf"].name,
-                                 "jpg": _preview_jpg(r["png"], out_dir / f"{name}_preview.jpg").name})
+                                 "jpg": r["preview"].name})
     progress("map", "done", "Maps ready")
 
     if stem == "envi" and files:

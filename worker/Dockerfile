@@ -6,6 +6,7 @@ FROM python:3.13-slim
 ENV PYTHONUNBUFFERED=1 \
     PIP_NO_CACHE_DIR=1 \
     MPLCONFIGDIR=/tmp/matplotlib \
+    MALLOC_ARENA_MAX=2 \
     OUTPUT_DIR=/data/outputs \
     TZ=Asia/Manila \
     ENV=production

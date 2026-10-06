@@ -212,7 +212,11 @@ def _logo(fig, path, rect):
         return
     from PIL import Image
     ax = fig.add_axes(rect)
-    ax.imshow(Image.open(path))
+    im = Image.open(path)
+    # Downscale to what the export needs (≤ 900 px ≈ 5 cm at 450 dpi): matplotlib resamples images as float
+    # arrays, so a full-size 2800 px logo costs hundreds of MB of memory while drawing.
+    im.thumbnail((900, 900), Image.LANCZOS)
+    ax.imshow(im)
     ax.set_axis_off()
 
 

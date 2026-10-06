@@ -14,6 +14,7 @@ result is stored as a label report (placed / missing / overlaps).
 """
 from __future__ import annotations
 
+import gc
 import json
 import math
 import textwrap
@@ -108,9 +109,12 @@ def _draw(ax, muni, prov, label_size=6.0, prov_label_size=13, pad=0.04, style: d
     return rep, label_artists
 
 
+VERIFY_DPI = 150     # label boxes scale with dpi, so overlaps are measured at a lower (memory-light) resolution
+
+
 def verify_labels(fig, label_artists) -> dict:
-    """Measure label boxes at the export resolution: count placed names and pairwise overlaps."""
-    fig.set_dpi(DPI)
+    """Measure label boxes (count placed names and pairwise overlaps) without a full export-size raster."""
+    fig.set_dpi(VERIFY_DPI)
     fig.canvas.draw()
     r = fig.canvas.get_renderer()
     boxes = [(t.get_text(), t.get_window_extent(r)) for t in label_artists]
@@ -235,7 +239,8 @@ def legend_title(payload: dict, layer: dict) -> tuple[str, str]:
     return (payload.get("texts", {}).get("legend_title") or layer["legend"]["title"]) + ":", ""
 
 
-def render_layer(payload: dict, layer: dict, out_dir: Path, stem: str) -> dict:
+def render_layer(payload: dict, layer: dict, out_dir: Path, stem: str, preview: Path | None = None,
+                 preview_px: int = 3000) -> dict:
     """Render PNG (300 dpi) + vector PDF of one layer. Returns paths, label report and alt text."""
     out_dir.mkdir(parents=True, exist_ok=True)
     st = STYLES.get(payload["type"], DEFAULT_STYLE)
@@ -349,13 +354,17 @@ def render_layer(payload: dict, layer: dict, out_dir: Path, stem: str) -> dict:
 
     png, pdf = out_dir / f"{stem}.png", out_dir / f"{stem}.pdf"
     meta_title = f"{(t.get('title') or payload['title'])} – {layer['label']}"
-    fig.savefig(png, dpi=DPI, metadata={"Title": meta_title})
     report = verify_labels(fig, label_artists)
     report.update({"municipal_label_size_pt": rep_layout["municipal_label_size_pt"],
                    "leader_lines": rep_layout["leader_lines"], "missing": rep_layout["missing"]})
     fig.savefig(pdf, metadata={"Title": meta_title, "Author": "DA-RFO-CAR AMIA"})
+    fig.savefig(png, dpi=DPI, metadata={"Title": meta_title})
+    if preview is not None:   # sharp JPG for photo mode, straight from the figure (no reload of the large PNG)
+        fig.savefig(preview, dpi=preview_px / max(fig.get_size_inches()), facecolor="white",
+                    pil_kwargs={"quality": 92, "optimize": True, "progressive": True, "subsampling": 0})
     plt.close(fig)
-    return {"png": png, "pdf": pdf, "label_report": report, "alt": alt_text(payload, layer)}
+    gc.collect()
+    return {"png": png, "pdf": pdf, "preview": preview, "label_report": report, "alt": alt_text(payload, layer)}
 
 
 def payload_issued_label(payload: dict) -> str:
