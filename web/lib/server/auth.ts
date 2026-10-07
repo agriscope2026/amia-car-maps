@@ -154,7 +154,14 @@ export async function assertSameOrigin() {
 
 export function errorResponse(e: unknown) {
   const status = e instanceof HttpError ? e.status : 500;
-  const message = e instanceof Error ? e.message : "Unexpected error";
+  // Supabase/PostgREST errors are plain objects ({ message, details, hint, code }), not Error instances
+  const o = (e && typeof e === "object" ? e : {}) as { message?: unknown; details?: unknown; hint?: unknown; code?: unknown };
+  const message =
+    e instanceof Error
+      ? e.message
+      : typeof o.message === "string"
+        ? [o.message, o.details, o.hint].filter((x) => typeof x === "string" && x).join(" – ") + (o.code ? ` (${o.code})` : "")
+        : "Unexpected error";
   if (status === 500) console.error(e);
   return Response.json({ error: message }, { status });
 }
