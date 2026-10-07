@@ -98,7 +98,10 @@ export default function ZoomImage({ src, alt }: { src: string; alt: string }) {
       const mid = local({ clientX: (a.x + b.x) / 2, clientY: (a.y + b.y) / 2 });
       zoomAt(pinch.current.s * (d / pinch.current.d), mid.x, mid.y);
     } else if (drag.current) {
-      setZ((cur) => clamp(cur.s, drag.current!.ox + e.clientX - drag.current!.x, drag.current!.oy + e.clientY - drag.current!.y));
+      // read the drag start now: the state updater runs later, possibly after pointer-up has cleared drag.current
+      const d = drag.current;
+      const x = d.ox + e.clientX - d.x, y = d.oy + e.clientY - d.y;
+      setZ((cur) => clamp(cur.s, x, y));
     }
   };
   const onUp = (e: React.PointerEvent) => {

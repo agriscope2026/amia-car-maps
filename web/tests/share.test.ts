@@ -26,7 +26,7 @@ describe("share links", () => {
     expect(serializeState(DEFAULT_STATE)).toBe("");
     const s = parseState(new URLSearchParams("v=999,abc,3&b=moon&cm=x"));
     expect(s.view).toBeUndefined();
-    expect(s.basemap).toBe("light");
+    expect(s.basemap).toBe("satellite");
     expect(s.cropMode).toBe("circles");
   });
 });

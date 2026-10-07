@@ -65,6 +65,11 @@ export default function PhotoMode({ payload, layerId, onLayer, onClose }: {
   const photos = useMemo(() => photosOf(payload), [payload]);
   const byLayer = photos.some((p) => p.layer);
   const [own, setOwn] = useState(0); // index for photos that are not tied to a map layer (ENVI)
+  // details (downloads, recommendations): beside the photo on wide screens, folded away elsewhere so the photo gets the room
+  const [details, setDetails] = useState(true);
+  useEffect(() => {
+    if (window.matchMedia("(max-width: 1100px), (max-height: 520px)").matches) setDetails(false);
+  }, []);
   const idx = byLayer ? Math.max(0, photos.findIndex((p) => p.layer === layerId)) : Math.min(own, photos.length - 1);
   const cur = photos[idx];
   const dialog = useRef<HTMLDivElement>(null);
@@ -80,7 +85,10 @@ export default function PhotoMode({ payload, layerId, onLayer, onClose }: {
 
   useEffect(() => {
     const key = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
+      if (e.key === "Escape") {
+        if (details && window.matchMedia("(max-width: 820px)").matches) setDetails(false);
+        else onClose();
+      }
       else if (e.key === "ArrowRight") select(idx + 1);
       else if (e.key === "ArrowLeft") select(idx - 1);
     };
@@ -92,7 +100,7 @@ export default function PhotoMode({ payload, layerId, onLayer, onClose }: {
       window.removeEventListener("keydown", key);
       document.body.style.overflow = prev;
     };
-  }, [select, idx, onClose]);
+  }, [select, idx, onClose, details]);
 
   useEffect(() => {
     for (const d of [-1, 1]) {
@@ -118,12 +126,20 @@ export default function PhotoMode({ payload, layerId, onLayer, onClose }: {
             {idx + 1} / {photos.length}
           </span>
         )}
+        {cur && (
+          <a className="photo-btn" href={cur.pkg ?? cur.print ?? cur.src} download title={cur.pkg ? "Download PNG (high definition)" : "Download image"}>
+            ⤓<span className="photo-btn-label"> Download</span>
+          </a>
+        )}
+        <button className={`photo-btn ${details ? "on" : ""}`} onClick={() => setDetails((d) => !d)} aria-expanded={details} aria-controls="photo-side">
+          ☰<span className="photo-btn-label"> {details ? "Hide details" : "Details"}</span>
+        </button>
         <button className="photo-close" onClick={onClose} aria-label="Close photo mode (Esc)">
-          ✕ Close
+          ✕<span className="photo-btn-label"> Close</span>
         </button>
       </header>
 
-      <div className="photo-body">
+      <div className={`photo-body ${details ? "with-side" : ""}`}>
         <figure className="photo-stage">
           {cur ? (
             <>
@@ -141,7 +157,8 @@ export default function PhotoMode({ payload, layerId, onLayer, onClose }: {
           )}
         </figure>
 
-        <aside className="photo-side">
+        <aside className="photo-side" id="photo-side" hidden={!details}>
+          <button className="photo-side-close" onClick={() => setDetails(false)}>Hide details ▾</button>
           {cur && (
             <div className="row">
               <a className="btn" href={cur.pkg ?? cur.print ?? cur.src} download>

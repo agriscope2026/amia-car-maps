@@ -51,7 +51,7 @@ export const GUIDE_STEPS: GuideStep[] = [
     title: "1. Choose a map type",
     body: (
       <>
-        <p>Tap a button to switch maps:</p>
+        <p>Choose which map to show:</p>
         <ul>
           <li><strong>ENVI</strong>: El Niño vulnerability per municipality</li>
           <li><strong>10-day rainfall</strong>: rain expected in the coming days</li>

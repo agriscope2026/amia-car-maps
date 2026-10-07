@@ -17,7 +17,7 @@ export interface ViewState {
   photo?: boolean; // photo mode (finished map images + recommendations)
 }
 
-export const DEFAULT_STATE: ViewState = { crops: false, cropMode: "circles", irrigation: false, basemap: "light" };
+export const DEFAULT_STATE: ViewState = { crops: false, cropMode: "circles", irrigation: false, basemap: "satellite" };
 
 const num = (s: string | null) => (s !== null && s !== "" && Number.isFinite(Number(s)) ? Number(s) : undefined);
 
@@ -36,7 +36,7 @@ export function parseState(q: URLSearchParams): ViewState {
   const t = q.get("it");
   s.irrTypes = t ? t.split(",").filter(Boolean) : undefined;
   const b = q.get("b");
-  s.basemap = b === "satellite" || b === "terrain" ? b : "light";
+  s.basemap = b === "light" || b === "terrain" ? b : "satellite";
   if (q.get("photo") === "1") s.photo = true;
   const v = (q.get("v") ?? "").split(",").map((x) => num(x));
   if (v.length === 3 && v.every((x) => x !== undefined)) {
@@ -56,7 +56,7 @@ export function serializeState(s: ViewState): string {
   if (s.crops && s.cropSel?.length) q.set("crop", s.cropSel.join(","));
   if (s.crops && s.cropMode !== "circles") q.set("cm", s.cropMode);
   if (s.irrigation && s.irrTypes?.length) q.set("it", s.irrTypes.join(","));
-  if (s.basemap !== "light") q.set("b", s.basemap);
+  if (s.basemap !== "satellite") q.set("b", s.basemap);
   if (s.photo) q.set("photo", "1");
   if (s.view) q.set("v", [s.view.lng.toFixed(4), s.view.lat.toFixed(4), s.view.zoom.toFixed(2)].join(","));
   return q.toString();

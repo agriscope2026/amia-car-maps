@@ -13,6 +13,7 @@ import { Downloads } from "./Downloads";
 import PhotoMode, { photosOf } from "./PhotoMode";
 import { FarmAdvice } from "./FarmAdvice";
 import AreaDialog from "./AreaDialog";
+import { useSheetSwipe } from "./useSheetSwipe";
 import GuideTour, { guideSeen, type GuideStep } from "./GuideTour";
 
 const MapView = dynamic(() => import("./MapView"), { ssr: false, loading: () => <div className="map map-loading">Loading map…</div> });
@@ -33,6 +34,8 @@ export default function Dashboard({ geo }: { geo: Gazetteer }) {
   const [tour, setTour] = useState(false);
   const [legendOpen, setLegendOpen] = useState(true);
   const initial = useRef<ViewState | null>(null);
+  const panelRef = useRef<HTMLElement>(null);
+  useSheetSwipe(panelRef, sheetOpen, setSheetOpen);
 
   // initial state from the URL (share links)
   useEffect(() => {
@@ -114,13 +117,6 @@ export default function Dashboard({ geo }: { geo: Gazetteer }) {
     setTour(true);
   };
 
-  // phones: keep the selected map-type chip in view (the chip row scrolls sideways)
-  useEffect(() => {
-    const row = document.querySelector<HTMLElement>(".type-chips");
-    const on = row?.querySelector<HTMLElement>(".on");
-    if (row && on) row.scrollTo({ left: on.offsetLeft - row.clientWidth / 2 + on.offsetWidth / 2, behavior: "smooth" });
-  }, [type, catalog]);
-
   // keep the URL in sync (share links)
   useEffect(() => {
     if (!catalog) return;
@@ -161,7 +157,10 @@ export default function Dashboard({ geo }: { geo: Gazetteer }) {
 
   const typeLabel = PRODUCT_TYPES.find((t) => t.id === type)?.label ?? "";
 
-  // map-type buttons: in the panel, and on phones also as chips over the map so they're always in reach
+  const pickType = (id: ProductType) => {
+    setPlaying(false);
+    set({ type: id, product: undefined, layer: undefined });
+  };
   const typeButtons = PRODUCT_TYPES.map((t) => {
     const has = available.some((a) => a.id === t.id);
     return (
@@ -171,10 +170,7 @@ export default function Dashboard({ geo }: { geo: Gazetteer }) {
         aria-checked={type === t.id}
         disabled={!has}
         className={type === t.id ? "on" : ""}
-        onClick={() => {
-          setPlaying(false);
-          set({ type: t.id, product: undefined, layer: undefined });
-        }}
+        onClick={() => pickType(t.id)}
       >
         {t.short}
       </button>
@@ -204,9 +200,20 @@ export default function Dashboard({ geo }: { geo: Gazetteer }) {
 
       <main className="body">
         <section className="mapwrap" aria-label="Map" data-tour="map">
-          <div className="type-chips" role="radiogroup" aria-label="Map type" data-tour="maptype">
-            {typeButtons}
-          </div>
+          {/* phones: the panel is a closed bottom sheet, so the map type gets a dropdown on the map itself */}
+          <label className="type-select" data-tour="maptype">
+            <span className="type-select-k">Map</span>
+            <select value={type ?? ""} onChange={(e) => pickType(e.target.value as ProductType)} aria-label="Map type">
+              {PRODUCT_TYPES.map((t) => {
+                const has = available.some((a) => a.id === t.id);
+                return (
+                  <option key={t.id} value={t.id} disabled={!has}>
+                    {t.label}{has ? "" : " – not available yet"}
+                  </option>
+                );
+              })}
+            </select>
+          </label>
           {payload?.synthetic && (
             <div className="banner" role="note">
               Demo data – synthetic values for testing, not an official forecast.
@@ -243,10 +250,10 @@ export default function Dashboard({ geo }: { geo: Gazetteer }) {
           )}
         </section>
 
-        <aside className={`panel ${sheetOpen ? "open" : ""}`} aria-label="Map controls and information">
+        <aside ref={panelRef} className={`panel ${sheetOpen ? "open" : ""}`} aria-label="Map controls and information">
           <button className="sheet-handle" onClick={() => setSheetOpen((o) => !o)} aria-expanded={sheetOpen}>
             <span className="grip" aria-hidden />
-            {sheetOpen ? "Hide panel" : `${PRODUCT_TYPES.find((t) => t.id === type)?.short ?? "Map"} · ${layer?.label ?? ""} – show controls`}
+            {sheetOpen ? "Swipe down or tap to hide" : `${PRODUCT_TYPES.find((t) => t.id === type)?.short ?? "Map"} · ${layer?.label ?? ""} – swipe up for controls`}
           </button>
 
           {error && <p className="error" role="alert">{error}</p>}
