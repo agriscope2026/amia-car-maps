@@ -28,8 +28,12 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
     }
     if (Array.isArray(body.crop_overlay))
       await updateDraft(id, { settings: { crop_overlay_crops: cropList } }, v.status === "published");
+    // optional: rivers & water bodies on the maps (remembered with the version)
+    const hydro_overlay = typeof body.hydro_overlay === "boolean" ? body.hydro_overlay : !!v.settings.hydro_overlay;
+    if (typeof body.hydro_overlay === "boolean" && body.hydro_overlay !== !!v.settings.hydro_overlay)
+      await updateDraft(id, { settings: { hydro_overlay } }, v.status === "published");
     const form = new FormData();
-    form.set("settings", JSON.stringify({ ...v.settings, version_id: v.id, texts: v.payload.texts, crop_overlay }));
+    form.set("settings", JSON.stringify({ ...v.settings, version_id: v.id, texts: v.payload.texts, crop_overlay, hydro_overlay }));
     if (v.type === "envi") {
       for (const f of v.settings.input_files ?? []) form.set(f.field, await loadUpload(f), f.filename);
     } else {
@@ -42,7 +46,7 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
     } else {
       await updateDraft(id, { exports: { job_id: job.id } });
     }
-    await audit(user, "export", "product_version", id, { job: job.id, crop_overlay: cropList });
+    await audit(user, "export", "product_version", id, { job: job.id, crop_overlay: cropList, hydro_overlay });
     return Response.json({ job: job.id });
   } catch (e) {
     return errorResponse(e);

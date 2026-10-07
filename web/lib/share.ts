@@ -12,12 +12,13 @@ export interface ViewState {
   cropMode: CropMode;
   irrigation: boolean;
   irrTypes?: string[];
+  hydro: boolean; // rivers & water bodies
   basemap: Basemap;
   view?: { lng: number; lat: number; zoom: number };
   photo?: boolean; // photo mode (finished map images + recommendations)
 }
 
-export const DEFAULT_STATE: ViewState = { crops: false, cropMode: "circles", irrigation: false, basemap: "satellite" };
+export const DEFAULT_STATE: ViewState = { crops: false, cropMode: "circles", irrigation: false, hydro: false, basemap: "satellite" };
 
 const num = (s: string | null) => (s !== null && s !== "" && Number.isFinite(Number(s)) ? Number(s) : undefined);
 
@@ -30,6 +31,7 @@ export function parseState(q: URLSearchParams): ViewState {
   const ov = (q.get("o") ?? "").split(",");
   s.crops = ov.includes("crops");
   s.irrigation = ov.includes("irr");
+  s.hydro = ov.includes("water");
   const cs = q.get("crop");
   s.cropSel = cs ? cs.split(",").filter(Boolean) : undefined;
   s.cropMode = q.get("cm") === "choropleth" ? "choropleth" : "circles";
@@ -51,7 +53,7 @@ export function serializeState(s: ViewState): string {
   if (s.type) q.set("type", s.type);
   if (s.product) q.set("p", s.product);
   if (s.layer) q.set("l", s.layer);
-  const ov = [s.crops && "crops", s.irrigation && "irr"].filter(Boolean) as string[];
+  const ov = [s.crops && "crops", s.irrigation && "irr", s.hydro && "water"].filter(Boolean) as string[];
   if (ov.length) q.set("o", ov.join(","));
   if (s.crops && s.cropSel?.length) q.set("crop", s.cropSel.join(","));
   if (s.crops && s.cropMode !== "circles") q.set("cm", s.cropMode);

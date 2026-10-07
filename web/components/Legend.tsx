@@ -1,5 +1,5 @@
 import type { CropsLayer, Layer } from "@/lib/types";
-import { IRRIGATION_TYPES, cropBreaks, fmtNumber, legendLabel } from "@/lib/format";
+import { cropBreaks, fmtNumber, legendLabel, type IrrigationType } from "@/lib/format";
 import { cropRamp } from "@/lib/crops";
 
 export function Legend({ layer, compact = false }: { layer: Layer; compact?: boolean }) {
@@ -96,20 +96,23 @@ export function CropLegend({ crops, sel, mode, onChange }: {
   );
 }
 
-export function IrrigationLegend({ types, data, onToggle }: { types: string[]; data: any; onToggle: (t: string) => void }) {
-  const counts: Record<string, number> = {};
-  for (const f of data?.features ?? []) counts[f.properties.type] = (counts[f.properties.type] ?? 0) + 1;
+export function IrrigationLegend({ types, list, data, onToggle }: {
+  types: string[];
+  list: IrrigationType[]; // the types present in the data (see irrigationTypes)
+  data: any;
+  onToggle: (t: string) => void;
+}) {
   return (
     <div className="legend">
       {data?.synthetic && <p className="hint warn">Demo records – approximate, synthetic locations.</p>}
       <ul>
-        {Object.entries(IRRIGATION_TYPES).map(([k, t]) => (
-          <li key={k}>
+        {list.map((t) => (
+          <li key={t.code}>
             <label className="check">
-              <input type="checkbox" checked={types.includes(k)} onChange={() => onToggle(k)} />
+              <input type="checkbox" checked={types.includes(t.code)} onChange={() => onToggle(t.code)} />
               <span className="dot" style={{ background: t.color }} aria-hidden />
               {t.label}
-              <span className="count">{counts[k] ?? 0}</span>
+              <span className="count">{t.count}</span>
             </label>
           </li>
         ))}

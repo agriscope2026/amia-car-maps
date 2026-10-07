@@ -70,5 +70,38 @@ export const IRRIGATION_TYPES: Record<string, { label: string; color: string }> 
   SWIP: { label: "Small water impounding project", color: "#6a51a3" },
   SSIP: { label: "Small-scale irrigation project", color: "#9e9ac8" },
   DAM: { label: "Dam", color: "#252525" },
+  RIVER: { label: "River (water source)", color: "#0aa2c0" },
   OTHER: { label: "Other", color: "#969696" },
 };
+/** colours for irrigation types that are not in IRRIGATION_TYPES (new types in an upload), in order */
+const EXTRA_IRR_COLORS = ["#e6550d", "#31a354", "#d6616b", "#8c6d31", "#e377c2", "#17becf", "#bcbd22", "#7f7f7f"];
+
+export interface IrrigationType {
+  code: string;
+  label: string;
+  color: string;
+  count: number;
+}
+
+/** The irrigation types present in the data: known types first (fixed colours), then new ones (alphabetical). */
+export function irrigationTypes(data: any): IrrigationType[] {
+  const seen = new Map<string, { label?: string; count: number }>();
+  for (const f of data?.features ?? []) {
+    const code = String(f.properties?.type || "OTHER");
+    const t = seen.get(code) ?? { count: 0 };
+    t.count += 1;
+    t.label ??= f.properties?.type_label || undefined;
+    seen.set(code, t);
+  }
+  const known = Object.keys(IRRIGATION_TYPES).filter((k) => seen.has(k));
+  const extra = [...seen.keys()].filter((k) => !IRRIGATION_TYPES[k]).sort();
+  return [
+    ...known.map((code) => ({ code, label: seen.get(code)!.label ?? IRRIGATION_TYPES[code].label, color: IRRIGATION_TYPES[code].color, count: seen.get(code)!.count })),
+    ...extra.map((code, i) => ({
+      code,
+      label: seen.get(code)!.label ?? code.replace(/_/g, " ").toLowerCase().replace(/^./, (c) => c.toUpperCase()),
+      color: EXTRA_IRR_COLORS[i % EXTRA_IRR_COLORS.length],
+      count: seen.get(code)!.count,
+    })),
+  ];
+}

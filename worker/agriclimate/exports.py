@@ -5,7 +5,8 @@ DA-RFO-CAR layout; all of them also come in one ZIP. ENVI additionally gets its 
 poster (450 dpi), each as PNG and PDF, in the prototype layout (sample data/envi_sample.png), with the map drawn in the same style as the
 other maps. A sharp JPG preview of each image is made for the dashboard's photo mode (not listed as a download).
 
-Optional: ``settings["crop_overlay"]`` draws standing crops as proportional circles on the maps.
+Optional: ``settings["crop_overlay"]`` draws standing crops as proportional circles on the maps;
+``settings["hydro_overlay"]`` draws rivers and water bodies (OpenStreetMap).
 """
 from __future__ import annotations
 
@@ -54,6 +55,8 @@ def _map_only(payload: dict, layer: dict, path: Path) -> Path:
     style = render.STYLES.get(payload["type"], render.DEFAULT_STYLE)
     render._draw(ax, muni, prov, label_size=5.5, prov_label_size=12, pad=0.12, style=style,
                  label_style=render.DARK_LABELS)
+    if payload.get("hydro_overlay") and mapinfo.draw_hydro(ax, scale=1.4):
+        mapinfo.draw_hydro_legend_in_map(ax)
     if payload.get("crop_overlay"):
         mapinfo.draw_crop_circles(ax, payload["crop_overlay"])
         mapinfo.draw_crop_legend_in_map(ax, payload["crop_overlay"])
@@ -102,6 +105,8 @@ def export_product(payload: dict, out_dir: Path, settings: dict | None = None, f
     ov = settings.get("crop_overlay")
     if ov and ov.get("crops"):
         payload = {**payload, "crop_overlay": ov}            # standing crops as proportional circles on the maps
+    if settings.get("hydro_overlay"):
+        payload = {**payload, "hydro_overlay": True}         # rivers & water bodies
     stem = payload["type"]
     manifest: dict = {"type": stem, "created": now_manila(), "files": {}, "maps": []}
 

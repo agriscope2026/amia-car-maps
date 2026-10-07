@@ -186,7 +186,7 @@ On **Reference data** you can update:
 
 - **Standing crops:** use the standing-crops template, with one column per crop in hectares, and set the "as of"
   date. Every crop column becomes a choice in the dashboard's crop overlay.
-- **Irrigation sources and dams:** a list with name, type (NIS, CIS, SWIP, SSIP, DAM or OTHER), latitude and
+- **Irrigation sources and dams:** a list with name, type (e.g. NIS, CIS, SWIP, SSIP, DAM, RIVER – any other type is accepted and gets its own colour and legend entry; an optional TYPE_LABEL column gives it a full name), latitude and
   longitude in decimal degrees, river, service area (ha), status and source. A GeoJSON file also works. Saving
   replaces the whole layer. Locations outside CAR, or with latitude and longitude swapped, are reported.
 

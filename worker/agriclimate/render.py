@@ -267,6 +267,7 @@ def render_layer(payload: dict, layer: dict, out_dir: Path, stem: str, preview: 
 
     rep_layout, label_artists = _draw(ax, muni, prov, label_size=6.2, prov_label_size=12.5, style=st,
                                       extent=map_extent(prov), label_style=DARK_LABELS, reserve=reserve)
+    hydro = bool(payload.get("hydro_overlay")) and info.draw_hydro(ax)
     overlay = payload.get("crop_overlay")
     if overlay:
         info.draw_crop_circles(ax, overlay)
@@ -320,9 +321,10 @@ def render_layer(payload: dict, layer: dict, out_dir: Path, stem: str, preview: 
     advice = advice_of(payload)
     farm_h = 56 if advice else 0                  # room kept under the legend for the farm recommendations
     crop_h = info.crop_legend_height(overlay)
-    if crop_h:
+    hydro_h = info.HYDRO_LEGEND_H if hydro else 0
+    if crop_h or hydro_h:
         farm_h = min(farm_h, 46)
-    row_h = min(8.0, (250 - farm_h - crop_h - y) / max(1, len(rows)))
+    row_h = min(8.0, (250 - farm_h - crop_h - hydro_h - y) / max(1, len(rows)))
     sw_h = min(6.4, row_h - 1.4)
     has_desc = any(r["desc"] for r in rows)
     for r in rows:
@@ -335,6 +337,8 @@ def render_layer(payload: dict, layer: dict, out_dir: Path, stem: str, preview: 
         y += row_h
     if crop_h:
         y = info.draw_crop_legend(fig, W, H, 207, y + 3, overlay)
+    if hydro:
+        y = info.draw_hydro_legend(fig, W, H, 207, y + 3)
     if advice:
         info.farm_block(fig, W, H, 207, y + 3, 251, advice)
     elif payload["type"] == "envi":                    # ENVI: its recommended actions fill the panel
@@ -346,8 +350,8 @@ def render_layer(payload: dict, layer: dict, out_dir: Path, stem: str, preview: 
          linespacing=1.3)
     credit = t.get("data_credit") or "DOST-PAGASA"
     first = "Data from" if payload["type"] == "envi" else "Weather data from"
-    ftxt(207, 281, f"Maps from: DA-RFO-CAR AMIA\n{first}: {credit}", ha="left", va="center", fontsize=6.4,
-         linespacing=1.35)
+    credits = f"Maps from: DA-RFO-CAR AMIA\n{first}: {credit}" + (f"\n{info.HYDRO_CREDIT}" if hydro else "")
+    ftxt(207, 281, credits, ha="left", va="center", fontsize=5.6 if hydro else 6.4, linespacing=1.35)
     _logo(fig, config.LOGO_DIR / "AMIA_Logo.png", rect(259, 273, 16, 16))
     if PAGASA_LOGO.exists():
         _logo(fig, PAGASA_LOGO, rect(277, 273, 16, 16))

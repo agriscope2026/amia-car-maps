@@ -6,7 +6,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { CatalogEntry, CropsLayer, Gazetteer, Layer, Payload, ProductType } from "@/lib/types";
 import { PRODUCT_TYPES } from "@/lib/types";
 import { DEFAULT_STATE, parseState, serializeState, type ViewState } from "@/lib/share";
-import { IRRIGATION_TYPES, defaultLayer, fmtDate, latestOf, sortIssues } from "@/lib/format";
+import { defaultLayer, fmtDate, latestOf, sortIssues, irrigationTypes } from "@/lib/format";
 import { Legend, CropLegend, IrrigationLegend } from "./Legend";
 import { Summary } from "./Summary";
 import { Downloads } from "./Downloads";
@@ -18,7 +18,6 @@ import GuideTour, { guideSeen, type GuideStep } from "./GuideTour";
 
 const MapView = dynamic(() => import("./MapView"), { ssr: false, loading: () => <div className="map map-loading">Loading map…</div> });
 
-const ALL_IRR = Object.keys(IRRIGATION_TYPES);
 
 export default function Dashboard({ geo }: { geo: Gazetteer }) {
   const [catalog, setCatalog] = useState<CatalogEntry[] | null>(null);
@@ -26,6 +25,8 @@ export default function Dashboard({ geo }: { geo: Gazetteer }) {
   const [payload, setPayload] = useState<Payload | null>(null);
   const [crops, setCrops] = useState<CropsLayer | null>(null);
   const [irrigation, setIrrigation] = useState<any | null>(null);
+  // why an overlay shows nothing: no data published yet, or it failed to load
+  const [overlayMsg, setOverlayMsg] = useState<{ crops?: string; irrigation?: string }>({});
   const [error, setError] = useState<string | null>(null);
   const [sheetOpen, setSheetOpen] = useState(false);
   const [playing, setPlaying] = useState(false);
@@ -76,11 +77,23 @@ export default function Dashboard({ geo }: { geo: Gazetteer }) {
   // overlays are loaded on demand
   useEffect(() => {
     if ((state.crops || payload || area) && !crops)
-      fetch("/api/public/crops").then((r) => r.json()).then((c) => c && setCrops(c)).catch(() => undefined);
+      fetch("/api/public/crops")
+        .then((r) => (r.ok ? r.json() : Promise.reject(new Error(`HTTP ${r.status}`))))
+        .then((c) => {
+          if (c?.crops?.length) setCrops(c);
+          else setOverlayMsg((m) => ({ ...m, crops: "No standing crops table has been published yet." }));
+        })
+        .catch(() => setOverlayMsg((m) => ({ ...m, crops: "Standing crops could not be loaded. Please try again later." })));
   }, [state.crops, payload, area, crops]);
   useEffect(() => {
     if (state.irrigation && !irrigation)
-      fetch("/api/public/irrigation").then((r) => r.json()).then(setIrrigation).catch(() => undefined);
+      fetch("/api/public/irrigation")
+        .then((r) => (r.ok ? r.json() : Promise.reject(new Error(`HTTP ${r.status}`))))
+        .then((g) => {
+          setIrrigation(g);
+          if (!g?.features?.length) setOverlayMsg((m) => ({ ...m, irrigation: "No irrigation sources or dams have been published yet." }));
+        })
+        .catch(() => setOverlayMsg((m) => ({ ...m, irrigation: "Irrigation sources could not be loaded. Please try again later." })));
   }, [state.irrigation, irrigation]);
   useEffect(() => {
     if (crops && !state.cropSel?.length) setState((s) => ({ ...s, cropSel: [crops.crops.includes("Rice") ? "Rice" : crops.crops[0]] }));
@@ -142,7 +155,9 @@ export default function Dashboard({ geo }: { geo: Gazetteer }) {
 
   const set = useCallback((patch: Partial<ViewState>) => setState((s) => ({ ...s, ...patch })), []);
   const onView = useCallback((v: ViewState["view"]) => setState((s) => ({ ...s, view: v })), []);
-  const irrTypes = state.irrTypes ?? ALL_IRR;
+  // irrigation types come from the data (any type an admin uploads); all are shown until the viewer filters
+  const irrList = useMemo(() => irrigationTypes(irrigation), [irrigation]);
+  const irrTypes = state.irrTypes ?? irrList.map((t) => t.code);
   const names = useMemo(() => Object.fromEntries(geo.gazetteer.map((g) => [g.area_key, `${g.name} (${g.province})`])), [geo]);
 
   const share = async () => {
@@ -230,6 +245,7 @@ export default function Dashboard({ geo }: { geo: Gazetteer }) {
             cropMode={state.cropMode}
             irrigation={irrigation}
             showIrrigation={state.irrigation}
+            showHydro={state.hydro}
             irrTypes={irrTypes}
             basemap={state.basemap}
             initialView={initial.current?.view}
@@ -328,6 +344,7 @@ export default function Dashboard({ geo }: { geo: Gazetteer }) {
             <label className="check">
               <input type="checkbox" checked={state.crops} onChange={(e) => set({ crops: e.target.checked })} /> Standing crops (ha)
             </label>
+            {state.crops && !crops && overlayMsg.crops && <p className="hint warn">{overlayMsg.crops}</p>}
             {state.crops && crops && (
               <div className="sub">
                 <div className="seg small" role="radiogroup" aria-label="Crop display">
@@ -349,13 +366,27 @@ export default function Dashboard({ geo }: { geo: Gazetteer }) {
             <label className="check">
               <input type="checkbox" checked={state.irrigation} onChange={(e) => set({ irrigation: e.target.checked })} /> Irrigation sources &amp; dams
             </label>
-            {state.irrigation && (
+            {state.irrigation && overlayMsg.irrigation && <p className="hint warn">{overlayMsg.irrigation}</p>}
+            {state.irrigation && !overlayMsg.irrigation && (
               <div className="sub">
                 <IrrigationLegend
                   types={irrTypes}
+                  list={irrList}
                   data={irrigation}
                   onToggle={(t) => set({ irrTypes: irrTypes.includes(t) ? irrTypes.filter((x) => x !== t) : [...irrTypes, t] })}
                 />
+              </div>
+            )}
+            <label className="check">
+              <input type="checkbox" checked={state.hydro} onChange={(e) => set({ hydro: e.target.checked })} /> Rivers &amp; water bodies
+            </label>
+            {state.hydro && (
+              <div className="sub">
+                <ul className="hydro-legend">
+                  <li><span className="hydro-sw river" aria-hidden /> River</li>
+                  <li><span className="hydro-sw water" aria-hidden /> Lake / reservoir</li>
+                </ul>
+                <p className="hint">Names appear when you zoom in. Source: OpenStreetMap.</p>
               </div>
             )}
             <label htmlFor="basemap">Basemap</label>

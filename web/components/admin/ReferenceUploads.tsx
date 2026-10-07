@@ -130,7 +130,7 @@ export default function ReferenceUploads() {
         kind="irrigation"
         title="Irrigation sources and dams"
         template="irrigation"
-        help="CSV/XLSX with NAME, TYPE (NIS, CIS, SWIP, SSIP, DAM, OTHER), LAT, LON, MUNICIPALITY, RIVER, SERVICE_AREA_HA, STATUS, SOURCE – or a GeoJSON with points (and optional service-area polygons). Saving replaces the whole layer."
+        help="CSV/XLSX with NAME, TYPE (NIS, CIS, SWIP, SSIP, DAM, RIVER … – new types are accepted), LAT, LON, MUNICIPALITY, PROVINCE, RIVER, SERVICE_AREA_HA, STATUS, SOURCE, optional TYPE_LABEL – or a GeoJSON with points (and optional service-area polygons). Saving replaces the whole layer."
       />
     </>
   );

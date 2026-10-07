@@ -27,7 +27,8 @@ TEMPLATE_INFO = {
     "drought": ("drought_forecast_template.csv", []),
     "irrigation": ("irrigation_sources_template.xlsx", [
         "One row per irrigation source / dam. LAT and LON in decimal degrees (WGS 84), e.g. 17.4123, 120.9876.",
-        "TYPE: NIS (national irrigation system), CIS (communal), SWIP, SSIP, DAM or OTHER.",
+        "TYPE: NIS (national irrigation system), CIS (communal), SWIP, SSIP, DAM, RIVER or OTHER – a new type is "
+        "also accepted (it gets its own colour in the dashboard); optional TYPE_LABEL column gives it a full name.",
         "SERVICE_AREA_HA: service area in hectares (ha). STATUS: Operational, Non-operational, "
         "Under construction, For rehabilitation, Proposed, Unknown.",
         "Service-area polygons can be uploaded separately as GeoJSON.",

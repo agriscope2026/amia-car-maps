@@ -5,7 +5,7 @@ import maplibregl, { type GeoJSONSource, type MapGeoJSONFeature } from "maplibre
 import "maplibre-gl/dist/maplibre-gl.css";
 import type { CropsLayer, Layer, Payload } from "@/lib/types";
 import type { Basemap, CropMode } from "@/lib/share";
-import { IRRIGATION_TYPES, circleRadius, cropBreaks, cropClass, escapeHtml, fmtNumber, fmtValue } from "@/lib/format";
+import { IRRIGATION_TYPES, irrigationTypes, circleRadius, cropBreaks, cropClass, escapeHtml, fmtNumber, fmtValue } from "@/lib/format";
 import { cropRamp } from "@/lib/crops";
 
 const BASEMAPS: Record<Basemap, { tiles: string[]; attribution: string; paint?: Record<string, number> }> = {
@@ -55,6 +55,7 @@ export interface MapViewProps {
   irrigation: any | null;
   showIrrigation: boolean;
   irrTypes: string[];
+  showHydro?: boolean; // rivers & water bodies (OpenStreetMap)
   basemap: Basemap;
   initialView?: { lng: number; lat: number; zoom: number };
   onViewChange?: (v: { lng: number; lat: number; zoom: number }) => void;
@@ -126,6 +127,9 @@ export default function MapView(props: MapViewProps) {
       map.addSource("labels", { type: "geojson", data: "/geo/labels.geojson" });
       map.addSource("crop-pts", { type: "geojson", data: { type: "FeatureCollection", features: [] } });
       map.addSource("irr", { type: "geojson", data: { type: "FeatureCollection", features: [] } });
+      // rivers & water bodies: filled from /geo/hydro.geojson the first time the overlay is switched on
+      map.addSource("hydro", { type: "geojson", data: { type: "FeatureCollection", features: [] },
+        attribution: "Rivers & water bodies © OpenStreetMap contributors" });
 
       map.addLayer({ id: "muni-fill", type: "fill", source: "muni",
         paint: { "fill-color": ["coalesce", ["feature-state", "color"], "#d9d9d9"], "fill-opacity": 0.88 } });
@@ -136,6 +140,12 @@ export default function MapView(props: MapViewProps) {
       map.addLayer({ id: "mask", type: "fill", source: "mask", paint: { "fill-color": "#f7f7f5", "fill-opacity": 0.72 } });
       map.addLayer({ id: "muni-line", type: "line", source: "muni",
         paint: { "line-color": "#6f6f6f", "line-width": ["interpolate", ["linear"], ["zoom"], 7, 0.3, 11, 1] } });
+      map.addLayer({ id: "hydro-water", type: "fill", source: "hydro", layout: { visibility: "none" },
+        filter: ["==", ["get", "kind"], "water"],
+        paint: { "fill-color": "#3a8fd8", "fill-opacity": 0.85, "fill-outline-color": "#1c5fa8" } });
+      map.addLayer({ id: "hydro-river", type: "line", source: "hydro", layout: { visibility: "none", "line-join": "round", "line-cap": "round" },
+        filter: ["==", ["get", "kind"], "river"],
+        paint: { "line-color": "#1f78d1", "line-width": ["interpolate", ["linear"], ["zoom"], 7, 0.8, 10, 1.8, 13, 3.2] } });
       map.addLayer({ id: "muni-hover", type: "line", source: "muni",
         paint: { "line-color": "#111", "line-width": ["case", ["boolean", ["feature-state", "hover"], false], 2.6, 0] } });
       map.addLayer({ id: "prov-line", type: "line", source: "prov",
@@ -148,13 +158,22 @@ export default function MapView(props: MapViewProps) {
       map.addLayer({ id: "irr-points", type: "circle", source: "irr", layout: { visibility: "none" },
         paint: {
           "circle-radius": ["interpolate", ["linear"], ["zoom"], 7, 5, 12, 9],
-          "circle-color": ["match", ["get", "type"], ...Object.entries(IRRIGATION_TYPES).flatMap(([k, v]) => [k, v.color]), "#969696"] as any,
+          "circle-color": "#969696", // set per type when the data arrives
           "circle-stroke-color": "#ffffff", "circle-stroke-width": 1.6,
         } });
       map.addLayer({ id: "irr-labels", type: "symbol", source: "irr", minzoom: 10, layout: { visibility: "none",
           "text-field": ["get", "name"], "text-font": ["Montserrat Medium"], "text-size": 11, "text-offset": [0, 1.1],
           "text-anchor": "top", "text-max-width": 10 },
         paint: { "text-color": "#08306b", "text-halo-color": "#fff", "text-halo-width": 1.4 } });
+      const hydroText = { "text-color": "#0d4f91", "text-halo-color": "rgba(255,255,255,0.95)", "text-halo-width": 1.8 };
+      map.addLayer({ id: "hydro-river-labels", type: "symbol", source: "hydro", minzoom: 9.5, filter: ["==", ["get", "kind"], "river"],
+        layout: { visibility: "none", "symbol-placement": "line", "text-field": ["get", "name"], "text-font": ["Montserrat SemiBold"],
+          "text-size": 12, "symbol-spacing": 280,
+          "text-max-angle": 60, "text-letter-spacing": 0.04 }, // winding mountain rivers: allow sharper bends than usual
+        paint: hydroText });
+      map.addLayer({ id: "hydro-water-labels", type: "symbol", source: "hydro", minzoom: 10, filter: ["==", ["get", "kind"], "water"],
+        layout: { visibility: "none", "text-field": ["get", "name"], "text-font": ["Montserrat Medium"], "text-size": 11, "text-max-width": 8 },
+        paint: hydroText });
       map.addLayer({ id: "labels-muni", type: "symbol", source: "labels", minzoom: 8.2,
         filter: ["==", ["get", "kind"], "municipality"],
         layout: { "text-field": ["get", "name"], "text-font": ["Montserrat SemiBold"],
@@ -265,11 +284,29 @@ export default function MapView(props: MapViewProps) {
     map.setLayoutProperty("muni-nodata", "visibility", choro ? "none" : "visible");
   }, [ready, props.showCrops, props.crops, props.cropSel, props.cropMode]);
 
+  // ------------------------------------------------- rivers & water bodies ---
+  const hydroLoaded = useRef(false);
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!ready || !map) return;
+    if (props.showHydro && !hydroLoaded.current) {
+      hydroLoaded.current = true;
+      (map.getSource("hydro") as GeoJSONSource).setData("/geo/hydro.geojson");
+    }
+    const vis = props.showHydro ? "visible" : "none";
+    for (const id of ["hydro-water", "hydro-river", "hydro-river-labels", "hydro-water-labels"]) map.setLayoutProperty(id, "visibility", vis);
+  }, [ready, props.showHydro]);
+
   // --------------------------------------------------------- irrigation ---
   useEffect(() => {
     const map = mapRef.current;
     if (!ready || !map) return;
-    if (props.irrigation) (map.getSource("irr") as GeoJSONSource).setData(props.irrigation);
+    if (props.irrigation) {
+      (map.getSource("irr") as GeoJSONSource).setData(props.irrigation);
+      // colours per type from the data, so new types uploaded by an admin get their own colour
+      const pairs = irrigationTypes(props.irrigation).flatMap((t) => [t.code, t.color]);
+      map.setPaintProperty("irr-points", "circle-color", pairs.length ? (["match", ["get", "type"], ...pairs, "#969696"] as any) : "#969696");
+    }
     const vis = props.showIrrigation ? "visible" : "none";
     map.setLayoutProperty("irr-points", "visibility", vis);
     map.setLayoutProperty("irr-labels", "visibility", vis);
@@ -365,9 +402,9 @@ function areaHtml(f: MapGeoJSONFeature, props: MapViewProps) {
 }
 
 function irrigationHtml(p: any) {
-  const t = IRRIGATION_TYPES[p.type] ?? IRRIGATION_TYPES.OTHER;
+  const label = p.type_label || IRRIGATION_TYPES[p.type]?.label || String(p.type ?? "Other").replace(/_/g, " ");
   const rows: [string, any][] = [
-    ["Type", t.label],
+    ["Type", label],
     ["River / source", p.river],
     ["Municipality", [p.municipality, p.province].filter(Boolean).join(", ")],
     ["Service area", p.service_area_ha != null && p.service_area_ha !== "" ? `${fmtNumber(Number(p.service_area_ha))} ha` : null],

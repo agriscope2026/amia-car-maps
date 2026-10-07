@@ -214,7 +214,29 @@ def test_crops_and_irrigation_layers():
     bad = pd.DataFrame({"NAME": ["A", "B"], "TYPE": ["NIS", "weird"], "LAT": [120.9, 17.0], "LON": [17.0, 121.0]})
     irr = reference_layers.build_irrigation(xlsx(bad), "i.xlsx")
     assert any("swapped" in e for e in irr["report"]["errors"])
-    assert any("saved as OTHER" in w for w in irr["report"]["warnings"])
+    assert any("New irrigation type(s) WEIRD" in w for w in irr["report"]["warnings"])
+
+
+def test_irrigation_types_are_dynamic():
+    """Any TYPE is kept (DA's list has RIVER sources); known codes keep their names, TYPE_LABEL names new ones."""
+    df = pd.DataFrame({
+        "NAME": ["Upper Chico RIS", "Ambuklao Dam", "Chico River Main", "Spring 1", "Pump 1"],
+        "TYPE": ["NIS", "DAM", "RIVER", "spring box", "Solar pump"],
+        "LAT": [17.4123, 16.4606, 17.2, 16.9, 17.0], "LON": [121.4428, 120.745, 121.1, 120.9, 121.0],
+        "MUNICIPALITY": ["Tabuk City", "Bokod", "Bontoc", "Sagada", "Bauko"],
+        "PROVINCE": ["Kalinga", "Benguet", "Mountain Province", "Mountain Province", "Mountain Province"],
+        "SERVICE_AREA_HA": [15311, 0, None, 5, 12], "STATUS": ["Operational", "Operational", "Operational",
+                                                              "Under construction", "Operational"],
+        "TYPE_LABEL": [None, None, None, None, "Solar-powered pump"],
+    })
+    irr = reference_layers.build_irrigation(xlsx(df), "i.xlsx")
+    assert irr["ok"], irr["report"]
+    props = [f["properties"] for f in irr["geojson"]["features"]]
+    assert [p["type"] for p in props] == ["NIS", "DAM", "RIVER", "SPRING_BOX", "SOLAR_PUMP"]
+    assert [p["type_label"] for p in props] == ["National Irrigation System (NIA)", "Dam", "River (water source)",
+                                               "Spring box", "Solar-powered pump"]
+    assert props[1]["province"] == "Benguet" and props[3]["status"] == "Under construction"
+    assert any("SOLAR_PUMP, SPRING_BOX" in w for w in irr["report"]["warnings"])
 
 
 # --------------------------------------------------------------- templates ---

@@ -47,6 +47,7 @@ export default function VersionEditor({ version, role, geo }: { version: any; ro
   const hasFarm = ["rainfall_dekad", "rainfall_seasonal", "drought"].includes(version.type);
   const canOverlay = ["rainfall_seasonal", "drought", "envi"].includes(version.type);
   const [cropList, setCropList] = useState<string[]>(version.settings?.crop_overlay_crops ?? []);
+  const [hydro, setHydro] = useState<boolean>(!!version.settings?.hydro_overlay);
   const [cropInfo, setCropInfo] = useState<{ crops: string[]; colors?: Record<string, string>; as_of: string } | null>(null);
   useEffect(() => {
     if (canOverlay) fetch("/api/public/crops").then((r) => r.json()).then(setCropInfo).catch(() => undefined);
@@ -97,7 +98,7 @@ export default function VersionEditor({ version, role, geo }: { version: any; ro
       setSaved(true);
       const r = await api(`/api/admin/versions/${version.id}/export`, {
         method: "POST",
-        json: canOverlay ? { crop_overlay: cropList } : {},
+        json: { hydro_overlay: hydro, ...(canOverlay ? { crop_overlay: cropList } : {}) },
       });
       if (!live) setDownloads([]); // published: current files stay downloadable until the new ones are ready
       setJob({ id: r.job, status: "queued", progress: [] });
@@ -269,6 +270,16 @@ export default function VersionEditor({ version, role, geo }: { version: any; ro
             ) : (
               <p className="help">Upload a standing crops table on the Reference data page first.</p>
             )}
+          </div>
+        )}
+        {editable && (
+          <div className="overlay-pick">
+            <h3>Rivers &amp; water bodies on the maps (optional)</h3>
+            <label className="check">
+              <input type="checkbox" checked={hydro} onChange={(e) => setHydro(e.target.checked)} />
+              Draw rivers, lakes and reservoirs{version.type === "envi" ? " (maps, presentation and poster)" : ""}, with a legend
+              and the OpenStreetMap credit. Then generate or regenerate the exports.
+            </label>
           </div>
         )}
         {stale && (

@@ -2,7 +2,8 @@
 
 * compass (top-left, as in the DA samples), scale bar (bottom-right) and the mm → litres note, which is placed
   automatically in an empty spot of the frame (map labels avoid it);
-* the "Farm Recommendations" block under the legend: advice for rice, corn and high-value crops (HVC).
+* the "Farm Recommendations" block under the legend: advice for rice, corn and high-value crops (HVC);
+* optional rivers & water bodies (OpenStreetMap, data/gis/hydro.geojson – built by scripts.build_hydro).
 """
 from __future__ import annotations
 
@@ -23,6 +24,10 @@ COMPASS = (0.22, 0.84, 0.055)                 # x, y, radius (axes fraction) –
 SCALE_BAR = (0.60, 0.035, 0.30, 0.03)         # x, y, w, h (axes fraction), bottom-right
 INK = "#1f2428"
 CROP_COLORS = {"rice": "#2e7d32", "corn": "#e0a100", "hvc": "#7b3fa0"}
+RIVER_COLOR = "#1f78d1"
+WATER_COLOR = "#3a8fd8"
+WATER_EDGE = "#1c5fa8"
+HYDRO_CREDIT = "Rivers & water bodies: © OpenStreetMap contributors"
 
 
 # ------------------------------------------------------------- geometry ---
@@ -272,6 +277,70 @@ def recs_block(fig, W: float, H: float, x: float, y0: float, y1: float, text: st
             y += line_h
         y += 1.2 if head else 0.6
     return y
+
+
+# ------------------------------------------------- rivers & water bodies ---
+
+@lru_cache(maxsize=1)
+def _hydro():
+    import geopandas as gpd
+    from .envi.config import GIS_DIR
+    path = GIS_DIR / "hydro.geojson"
+    if not path.exists():
+        return None, None
+    g = gpd.read_file(path)
+    return g[g["kind"] == "river"], g[g["kind"] == "water"]
+
+
+def draw_hydro(ax, scale: float = 1.0) -> bool:
+    """Rivers and lakes/reservoirs over the class colours, under the boundaries and labels. False if no data."""
+    rivers, waters = _hydro()
+    if rivers is None:
+        return False
+    if len(waters):
+        waters.plot(ax=ax, facecolor=WATER_COLOR, edgecolor=WATER_EDGE, linewidth=0.3 * scale, alpha=0.95, zorder=2.6)
+    if len(rivers):
+        rivers.plot(ax=ax, color=RIVER_COLOR, linewidth=0.55 * scale, alpha=0.95, zorder=2.7)
+    return True
+
+
+HYDRO_LEGEND_H = 13.0
+
+
+def draw_hydro_legend(fig, W: float, H: float, x: float, y: float) -> float:
+    """River / lake key under the map legend. Returns the bottom y (mm)."""
+    from matplotlib.lines import Line2D
+
+    def ftxt(xx, yy, s, **kw):
+        fig.text(xx / W, 1 - yy / H, s, **kw)
+
+    ftxt(x + 2, y, "RIVERS & WATER BODIES", ha="left", va="top", fontsize=7.6, fontweight="bold", color="#0b532f")
+    cy = y + 7.5
+    fig.add_artist(Line2D([(x + 2) / W, (x + 15) / W], [1 - cy / H] * 2, color=RIVER_COLOR, lw=1.6))
+    ftxt(x + 17, cy, "River", ha="left", va="center", fontsize=7)
+    fig.add_artist(Rectangle(((x + 44) / W, 1 - (cy + 2.2) / H), 13 / W, 4.4 / H, transform=fig.transFigure,
+                             facecolor=WATER_COLOR, edgecolor=WATER_EDGE, lw=0.5))
+    ftxt(x + 59, cy, "Lake / reservoir", ha="left", va="center", fontsize=7)
+    return y + HYDRO_LEGEND_H
+
+
+def draw_hydro_legend_in_map(ax) -> None:
+    """River / lake key inside the map image (ENVI presentation and poster), in an empty corner."""
+    from matplotlib.lines import Line2D
+    w, h = 0.40, 0.095
+    spot = _find(ax, w, h, [], "top-right") or _find(ax, w, h, [], "bottom-left") or (0.58, 0.90, w, h)
+    x0, y0, _, _ = spot
+    t = ax.transAxes
+    ax.add_patch(FancyBboxPatch((x0, y0), w, h, boxstyle="round,pad=0,rounding_size=0.01", transform=t,
+                                facecolor=(1, 1, 1, 0.92), edgecolor="#555555", lw=0.6, zorder=30))
+    cy = y0 + h * 0.62
+    ax.add_line(Line2D([x0 + 0.02, x0 + 0.07], [cy, cy], transform=t, color=RIVER_COLOR, lw=1.8, zorder=31))
+    ax.text(x0 + 0.08, cy, "River", transform=t, ha="left", va="center", fontsize=7.4, color=INK, zorder=31)
+    ax.add_patch(Rectangle((x0 + 0.17, cy - 0.012), 0.05, 0.024, transform=t, facecolor=WATER_COLOR,
+                           edgecolor=WATER_EDGE, lw=0.5, zorder=31))
+    ax.text(x0 + 0.23, cy, "Lake / reservoir", transform=t, ha="left", va="center", fontsize=7.4, color=INK, zorder=31)
+    ax.text(x0 + 0.02, y0 + 0.016, "© OpenStreetMap contributors", transform=t, ha="left", va="bottom", fontsize=5.6,
+            color="#555555", zorder=31)
 
 
 def draw_crop_legend_in_map(ax, ov: dict) -> None:

@@ -11,14 +11,30 @@ from .. import reference
 from ..envi.io_loader import load_crops
 from . import common
 
+# known irrigation types (names shown on the dashboard); any other TYPE value is accepted as a new type
 IRRIGATION_TYPES = {
     "NIS": "National Irrigation System (NIA)",
     "CIS": "Communal Irrigation System (NIA)",
     "SWIP": "Small Water Impounding Project",
     "SSIP": "Small-Scale Irrigation Project",
     "DAM": "Dam",
+    "RIVER": "River (water source)",
     "OTHER": "Other irrigation source",
 }
+TYPE_ALIASES = {"NATIONAL": "NIS", "COMMUNAL": "CIS"}
+
+
+def type_code(raw) -> str:
+    """TYPE cell → code: upper case, letters/digits/underscores, at most 24 characters ('' → OTHER)."""
+    s = "" if raw is None or (isinstance(raw, float) and pd.isna(raw)) else str(raw).strip().upper()
+    s = re.sub(r"[^A-Z0-9]+", "_", s).strip("_")[:24]
+    return TYPE_ALIASES.get(s, s) or "OTHER"
+
+
+def type_label(code: str, given=None) -> str:
+    """Name of a type: the TYPE_LABEL cell if given, the known name, else the code in words (e.g. 'Spring box')."""
+    g = "" if given is None or (isinstance(given, float) and pd.isna(given)) else str(given).strip()
+    return g or IRRIGATION_TYPES.get(code) or code.replace("_", " ").capitalize()
 STATUSES = {"OPERATIONAL", "NON-OPERATIONAL", "UNDER CONSTRUCTION", "FOR REHABILITATION", "PROPOSED", "UNKNOWN"}
 # CAR bounding box with a margin (EPSG:4326)
 CAR_BBOX = (120.3, 15.9, 121.75, 18.6)
@@ -124,7 +140,8 @@ def _in_car(lon: float, lat: float) -> bool:
 
 
 def build_irrigation(src, filename: str, settings: dict | None = None) -> dict:
-    """CSV/XLSX (NAME, TYPE, LAT, LON, MUNICIPALITY, RIVER, SERVICE_AREA_HA, STATUS, SOURCE) or GeoJSON."""
+    """CSV/XLSX (NAME, TYPE, LAT, LON, MUNICIPALITY, PROVINCE, RIVER, SERVICE_AREA_HA, STATUS, SOURCE; optional
+    TYPE_LABEL) or GeoJSON. TYPE is free: known codes keep their names, new codes become new legend entries."""
     rep = {"dataset": "irrigation", "filename": filename, "errors": [], "warnings": []}
     if filename.lower().endswith((".geojson", ".json")):
         return _irrigation_geojson(src, rep)
@@ -134,6 +151,7 @@ def build_irrigation(src, filename: str, settings: dict | None = None) -> dict:
         return {"type": "irrigation", "ok": False, "report": rep}
     cols = {k: common.find_col(df, *a) for k, a in {
         "name": ("NAME", "PROJECT_NAME", "SYSTEM_NAME"), "type": ("TYPE", "CATEGORY"),
+        "type_label": ("TYPE_LABEL", "TYPE_NAME", "TYPE_DESCRIPTION"),
         "lat": ("LAT", "LATITUDE", "Y"), "lon": ("LON", "LONG", "LONGITUDE", "X"),
         "municipality": ("MUNICIPALITY",), "province": ("PROVINCE",), "river": ("RIVER", "WATER_SOURCE"),
         "service_area_ha": ("SERVICE_AREA_HA", "SERVICE_AREA", "AREA_HA"), "status": ("STATUS",),
@@ -159,13 +177,9 @@ def build_irrigation(src, filename: str, settings: dict | None = None) -> dict:
             else:
                 rep["errors"].append(f"Row {i + 2} ({name}): {lat:.4f}, {lon:.4f} is outside CAR.")
             continue
-        typ = str(r[cols["type"]]).strip().upper()
-        typ = {"NATIONAL": "NIS", "COMMUNAL": "CIS"}.get(typ, typ)
-        if typ not in IRRIGATION_TYPES:
-            rep["warnings"].append(f"Row {i + 2} ({name}): type '{r[cols['type']]}' is not one of "
-                                   f"{', '.join(IRRIGATION_TYPES)}; saved as OTHER.")
-            typ = "OTHER"
-        props = {"name": name, "type": typ, "type_label": IRRIGATION_TYPES[typ]}
+        typ = type_code(r[cols["type"]])
+        given = r[cols["type_label"]] if cols["type_label"] is not None else None
+        props = {"name": name, "type": typ, "type_label": type_label(typ, given)}
         for k in ("municipality", "province", "river", "status", "source"):
             v = r[cols[k]] if cols[k] is not None else None
             props[k] = None if v is None or pd.isna(v) or str(v).strip() == "" else str(v).strip()
@@ -179,9 +193,17 @@ def build_irrigation(src, filename: str, settings: dict | None = None) -> dict:
         feats.append({"type": "Feature", "geometry": {"type": "Point", "coordinates": [round(lon, 6),
                                                                                          round(lat, 6)]},
                       "properties": props})
+    _note_new_types(feats, rep)
     return {"type": "irrigation", "ok": not rep["errors"], "report": rep,
             "geojson": {"type": "FeatureCollection", "features": feats},
             "counts": pd.Series([f["properties"]["type"] for f in feats]).value_counts().to_dict() if feats else {}}
+
+
+def _note_new_types(feats: list[dict], rep: dict) -> None:
+    new = sorted({f["properties"]["type"] for f in feats} - set(IRRIGATION_TYPES))
+    if new:
+        rep["warnings"].append("New irrigation type(s) " + ", ".join(new) + ": they get their own colour and entry in "
+                               "the dashboard legend. Add a TYPE_LABEL column to give them a full name.")
 
 
 def _irrigation_geojson(src, rep) -> dict:
@@ -200,12 +222,12 @@ def _irrigation_geojson(src, rep) -> dict:
         if not p.get("name") and not p.get("NAME"):
             rep["warnings"].append(f"Feature {i} has no name.")
         p = {k.lower(): v for k, v in p.items()}
-        typ = str(p.get("type", "OTHER")).upper()
-        p["type"] = typ if typ in IRRIGATION_TYPES else "OTHER"
-        p["type_label"] = IRRIGATION_TYPES[p["type"]]
+        p["type"] = type_code(p.get("type"))
+        p["type_label"] = type_label(p["type"], p.get("type_label"))
         f = {**f, "properties": p}
         gt = (f.get("geometry") or {}).get("type")
         (points if gt == "Point" else polys if gt in ("Polygon", "MultiPolygon") else []).append(f)
+    _note_new_types(points, rep)
     return {"type": "irrigation", "ok": not rep["errors"], "report": rep,
             "geojson": {"type": "FeatureCollection", "features": points},
             "service_areas": {"type": "FeatureCollection", "features": polys}}

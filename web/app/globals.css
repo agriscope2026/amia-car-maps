@@ -480,3 +480,10 @@ select { width: 100%; padding: 8px 10px; border: 1px solid var(--line); border-r
 .photo-bar, .photo-body, .photo-strip { min-width: 0; }
 .photo-nav { background: rgba(10, 30, 20, .72); box-shadow: 0 1px 6px rgba(0,0,0,.35); }
 .photo-nav:hover { background: rgba(10, 30, 20, .9); }
+
+/* rivers & water bodies overlay legend */
+.hydro-legend { list-style: none; margin: 0; padding: 0; display: flex; gap: 14px; flex-wrap: wrap; font-size: 12.5px; }
+.hydro-legend li { display: flex; align-items: center; gap: 6px; }
+.hydro-sw { display: inline-block; flex-shrink: 0; }
+.hydro-sw.river { width: 22px; height: 3px; border-radius: 2px; background: #1f78d1; }
+.hydro-sw.water { width: 22px; height: 14px; border-radius: 3px; background: #3a8fd8; border: 1px solid #1c5fa8; }
