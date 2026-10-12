@@ -29,7 +29,7 @@ export const postgresRepo: Repo = {
   async listPublished() {
     return q<CatalogEntry>(
       `select v.id, p.type, v.title, v.payload->>'issued' as issued, v.payload->'period' as period, 'published' as status,
-         v.version, coalesce((v.payload->>'synthetic')::boolean, false) as synthetic,
+         v.version, v.published_at, coalesce((v.payload->>'synthetic')::boolean, false) as synthetic,
          coalesce((select jsonb_agg(jsonb_build_object('id', l->>'id', 'label', l->>'label'))
                    from jsonb_array_elements(v.payload->'layers') l), '[]') as layers
        from product_versions v join products p on p.id = v.product_id

@@ -8,7 +8,7 @@ import pandas as pd
 
 from . import config
 from .io_loader import DatasetResult, Gazetteer
-from .normalize import minmax, normalize_hazard
+from .normalize import fixed_scale, minmax, normalize_hazard
 
 IND_KEYS = ["hazard", "damage", "crops"]
 DATASET_OF = {"hazard": "drought", "damage": "damage", "crops": "crops"}
@@ -197,6 +197,48 @@ def compute_envi(results: dict[str, DatasetResult], gaz: Gazetteer, settings: di
     }
     meta["summary"] = summarize(df, breaks)
     return df, meta
+
+
+def monthly_envi(df: pd.DataFrame, meta: dict, settings: dict, drought_report: dict) -> dict[str, pd.DataFrame]:
+    """ENVI for each outlook month: the drought part is that month's forecast only, damage and standing crops are the
+    same as in the season ENVI. A categorical month score is scaled by the maximum score (score ÷ 3), so a month
+    with drought everywhere scores 1 everywhere instead of 0 (min–max of identical values); numeric monthly values
+    are min–max scaled per month. Returns {month name: frame with hazard_raw, hazard_norm, envi, envi_class}."""
+    weights = meta["weights"]
+    method = meta["classification"]
+    categorical = drought_report.get("hazard_type") == "categorical"
+    invert = drought_report.get("hazard_direction") == "lower_worse"
+    out = {}
+    for m in meta.get("hazard_months", []):
+        col = f"m_{m}"
+        if col not in df:
+            continue
+        raw = pd.to_numeric(df[col], errors="coerce")
+        hz = fixed_scale(raw, config.DROUGHT_MAX_SCORE) if categorical else minmax(raw, invert=invert)
+        if settings.get("missing_policy", "nodata") == "zero":
+            hz = hz.fillna(0.0)
+        norms = pd.DataFrame({"hazard_norm": hz, "damage_norm": df["damage_norm"], "crops_norm": df["crops_norm"]})
+        envi = weighted_sum(norms, weights)
+        breaks = class_breaks(envi, method)
+        f = norms.assign(hazard_raw=raw, envi=envi, envi_class=classify(envi, breaks, method))
+        f["rank"] = f["envi"].rank(ascending=False, method="min").astype("Int64")
+        f.attrs["breaks"] = breaks
+        out[m] = f
+    return out
+
+
+def month_view(df: pd.DataFrame, meta: dict, month: str, f: pd.DataFrame, label: str) -> tuple[pd.DataFrame, dict]:
+    """The season table and metadata with one month's ENVI in place of the season's (for the monthly presentation:
+    classes, top 10, crops at risk and recommendations of that month)."""
+    d = df.copy()
+    for c in ("hazard_raw", "hazard_norm", "envi", "envi_class", "rank"):
+        d[c] = f[c].reindex(df.index).values
+    d["class_color"] = d["envi_class"].map({**config.CLASS_COLORS, config.NO_DATA_LABEL: config.NO_DATA_COLOR})
+    d = d.sort_values(["rank", "province", "area"], na_position="last").reset_index(drop=True)
+    breaks = f.attrs["breaks"]
+    m = {**meta, "breaks": breaks, "month": label, "month_name": month,
+         "n_nodata": int((d.envi_class == config.NO_DATA_LABEL).sum()), "summary": summarize(d, breaks)}
+    return d, m
 
 
 def summarize(df: pd.DataFrame, breaks: list[float]) -> dict:

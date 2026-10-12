@@ -34,7 +34,8 @@ export function downloadsFromManifest(m: any, href: (file: string) => string): D
     for (const [k, label, preview] of MAP_FILES)
       if (mp[k]) out.push({ label, url: href(mp[k]), alt: mp.alt, group: mp.label, layer: mp.layer, kind: k, preview });
   }
-  if (m.files?.zip) out.push({ label: "All maps – PNG and PDF (ZIP)", url: href(m.files.zip), group: "Whole product", kind: "zip" });
+  const zipLabel = m.type === "envi" ? "All presentations and A4 posters + computation Excel (ZIP)" : "All maps – PNG and PDF (ZIP)";
+  if (m.files?.zip) out.push({ label: zipLabel, url: href(m.files.zip), group: "Whole product", kind: "zip" });
   return out;
 }
 

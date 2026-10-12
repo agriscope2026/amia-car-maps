@@ -6,7 +6,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { CatalogEntry, CropsLayer, Gazetteer, Layer, Payload, ProductType } from "@/lib/types";
 import { PRODUCT_TYPES } from "@/lib/types";
 import { DEFAULT_STATE, parseState, serializeState, type ViewState } from "@/lib/share";
-import { defaultLayer, fmtDate, latestOf, sortIssues, irrigationTypes } from "@/lib/format";
+import { defaultLayer, fmtDate, latestOf, sortIssues, irrigationTypes, withoutTotals } from "@/lib/format";
 import { Legend, CropLegend, IrrigationLegend } from "./Legend";
 import { Summary } from "./Summary";
 import { Downloads } from "./Downloads";
@@ -15,6 +15,8 @@ import { FarmAdvice } from "./FarmAdvice";
 import AreaDialog from "./AreaDialog";
 import { useSheetSwipe } from "./useSheetSwipe";
 import GuideTour, { guideSeen, type GuideStep } from "./GuideTour";
+import { classChanges, compareLayerId } from "@/lib/insights";
+import { loadSeen, newUpdates, saveSeen, updateKey, updatedOn, type Seen } from "@/lib/updates";
 
 const MapView = dynamic(() => import("./MapView"), { ssr: false, loading: () => <div className="map map-loading">Loading map…</div> });
 
@@ -23,6 +25,7 @@ export default function Dashboard({ geo }: { geo: Gazetteer }) {
   const [catalog, setCatalog] = useState<CatalogEntry[] | null>(null);
   const [state, setState] = useState<ViewState>(DEFAULT_STATE);
   const [payload, setPayload] = useState<Payload | null>(null);
+  const [prevPayload, setPrevPayload] = useState<Payload | null>(null); // the issue before, for "what changed"
   const [crops, setCrops] = useState<CropsLayer | null>(null);
   const [irrigation, setIrrigation] = useState<any | null>(null);
   // why an overlay shows nothing: no data published yet, or it failed to load
@@ -34,6 +37,9 @@ export default function Dashboard({ geo }: { geo: Gazetteer }) {
   const [area, setArea] = useState<string | null>(null);
   const [tour, setTour] = useState(false);
   const [legendOpen, setLegendOpen] = useState(true);
+  // "new update" notice: latest issues this browser has not seen yet (remembered in localStorage)
+  const [seen, setSeen] = useState<Seen | null>(null);
+  useEffect(() => setSeen(loadSeen()), []);
   const initial = useRef<ViewState | null>(null);
   const panelRef = useRef<HTMLElement>(null);
   useSheetSwipe(panelRef, sheetOpen, setSheetOpen);
@@ -67,12 +73,35 @@ export default function Dashboard({ geo }: { geo: Gazetteer }) {
     setPayload((p) => (p?.id === entry.id ? p : null));
     fetch(`/api/public/products/${encodeURIComponent(entry.id)}`)
       .then((r) => (r.ok ? r.json() : Promise.reject(new Error(`Product: HTTP ${r.status}`))))
-      .then((p: Payload) => !cancelled && setPayload({ ...p, id: entry.id }))
+      .then((p: Payload) => !cancelled && setPayload(withoutTotals({ ...p, id: entry.id })))
       .catch((e) => !cancelled && setError(String(e.message ?? e)));
     return () => {
       cancelled = true;
     };
   }, [entry?.id]);
+
+  // the previous issue of the same map type (for changes since the last issue)
+  const prevEntry = entry ? issues[issues.findIndex((p) => p.id === entry.id) + 1] : undefined;
+  useEffect(() => {
+    if (!prevEntry) {
+      setPrevPayload(null);
+      return;
+    }
+    let cancelled = false;
+    fetch(`/api/public/products/${encodeURIComponent(prevEntry.id)}`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((p: Payload | null) => !cancelled && setPrevPayload(p ? { ...p, id: prevEntry.id } : null))
+      .catch(() => !cancelled && setPrevPayload(null));
+    return () => {
+      cancelled = true;
+    };
+  }, [prevEntry?.id]);
+  const cmpId = payload && prevPayload && prevPayload.type === payload.type ? compareLayerId(payload, layer?.id, prevPayload) : null;
+  const cmpLayer = (cmpId && payload?.layers.find((l) => l.id === cmpId)) || null;
+  const changes = useMemo(() => {
+    const prevLayer = cmpId ? prevPayload?.layers.find((l) => l.id === cmpId) : undefined;
+    return cmpLayer && prevLayer ? classChanges(cmpLayer, prevLayer) : null;
+  }, [cmpLayer, prevPayload, cmpId]);
 
   // overlays are loaded on demand
   useEffect(() => {
@@ -176,6 +205,19 @@ export default function Dashboard({ geo }: { geo: Gazetteer }) {
     setPlaying(false);
     set({ type: id, product: undefined, layer: undefined });
   };
+  const updates = useMemo(() => (catalog && seen ? newUpdates(catalog, seen) : []), [catalog, seen]);
+  const isNew = (t: ProductType) => updates.some((u) => u.type === t);
+  const markSeen = (list = updates) => {
+    const next = { ...(seen ?? {}), ...Object.fromEntries(list.map((u) => [u.type, updateKey(u)])) };
+    setSeen(next);
+    saveSeen(next);
+  };
+  const openUpdate = (u: (typeof updates)[number]) => {
+    setPlaying(false);
+    set({ type: u.type, product: u.id, layer: undefined });
+    markSeen([u]);
+  };
+
   const typeButtons = PRODUCT_TYPES.map((t) => {
     const has = available.some((a) => a.id === t.id);
     return (
@@ -188,6 +230,7 @@ export default function Dashboard({ geo }: { geo: Gazetteer }) {
         onClick={() => pickType(t.id)}
       >
         {t.short}
+        {isNew(t.id) && <span className="new-badge" aria-label="new update">NEW</span>}
       </button>
     );
   });
@@ -223,17 +266,42 @@ export default function Dashboard({ geo }: { geo: Gazetteer }) {
                 const has = available.some((a) => a.id === t.id);
                 return (
                   <option key={t.id} value={t.id} disabled={!has}>
-                    {t.label}{has ? "" : " – not available yet"}
+                    {t.label}{has ? "" : " – not available yet"}{isNew(t.id) ? " · NEW" : ""}
                   </option>
                 );
               })}
             </select>
           </label>
-          {payload?.synthetic && (
-            <div className="banner" role="note">
-              Demo data – synthetic values for testing, not an official forecast.
-            </div>
-          )}
+          <div className="map-notices">
+            {updates.length > 0 && !state.photo && (
+              <div className="update-notice" role="status" aria-live="polite">
+                <span className="update-bell" aria-hidden>🔔</span>
+                <div className="update-body">
+                  <strong>{updates.length === 1 ? "New update" : `${updates.length} new updates`}</strong>
+                  <ul>
+                    {updates.map((u) => (
+                      <li key={u.id}>
+                        <button onClick={() => openUpdate(u)} title={u.type === type ? "Mark as seen" : "Open this map"}>
+                          <span className="update-name">{PRODUCT_TYPES.find((t) => t.id === u.type)?.short}</span>
+                          <span className="update-period">{u.period.label}</span>
+                          <span className="update-date">updated {fmtDate(updatedOn(u))}</span>
+                          {u.type === type ? <span className="update-here">on screen</span> : <span className="update-go">View ▸</span>}
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+                <button className="update-close" onClick={() => markSeen()} aria-label="Dismiss: mark all updates as seen">
+                  ✕
+                </button>
+              </div>
+            )}
+            {payload?.synthetic && (
+              <div className="banner" role="note">
+                Demo data – synthetic values for testing, not an official forecast.
+              </div>
+            )}
+          </div>
           <MapView
             bounds={geo.bounds}
             payload={payload}
@@ -454,6 +522,8 @@ export default function Dashboard({ geo }: { geo: Gazetteer }) {
           payload={payload}
           layer={layer}
           crops={crops}
+          change={changes?.[area]}
+          compared={cmpLayer && prevEntry ? { layer: cmpLayer.label, issue: prevEntry.period.label } : null}
           onLayer={(id) => set({ layer: id })}
           onPhoto={payload && photos.length ? () => { setArea(null); set({ photo: true }); } : undefined}
           onClose={() => setArea(null)}

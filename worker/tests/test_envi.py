@@ -238,3 +238,22 @@ def test_templates_roundtrip(tmp_path, gaz):
     filled.to_excel(buf, index=False)
     res = io_loader.load_crops(buf.getvalue(), "c.xlsx", gaz)
     assert res.ok and res.report["n_unmatched"] == 0 and not res.report["missing_areas"]
+
+
+def test_monthly_envi_layers_follow_the_total():
+    from agriclimate.envi import pipeline
+    from agriclimate.products import envi_product
+    p = envi_product.build(pipeline.default_files(),
+                           {"issue_date": "2026-09-15", "period_start": "2026-10", "period_end": "2027-03"})
+    ids = [l["id"] for l in p["layers"]]
+    assert ids == ["envi"] + [f"m_{m}" for m in ("2026-10", "2026-11", "2026-12", "2027-01", "2027-02", "2027-03")]
+    oct_, jan = p["layers"][1]["values"]["KALINGA|TABUK"], p["layers"][4]["values"]["KALINGA|TABUK"]
+    # month drought part = score ÷ 3: dry condition (1) in October, drought (3) in January
+    assert oct_["drought_category"] == "dry condition" and oct_["hazard_norm"] == pytest.approx(1 / 3, abs=0.01)
+    assert jan["hazard_norm"] == 1 and jan["envi"] > oct_["envi"]
+    # damage and crops are the season values; ENVI = Σ weight × part
+    w = p["method"]["weights"]
+    assert jan["envi"] == pytest.approx(w["hazard"] * jan["hazard_norm"] + w["damage"] * jan["damage_norm"]
+                                        + w["crops"] * jan["crops_norm"], abs=0.01)
+    # a month with drought everywhere is not flattened to 0 (min–max of identical values)
+    assert all(v["hazard_norm"] == 1 for v in p["layers"][5]["values"].values() if v["hazard_norm"] is not None)

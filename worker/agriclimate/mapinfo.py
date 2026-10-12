@@ -324,56 +324,75 @@ def draw_hydro_legend(fig, W: float, H: float, x: float, y: float) -> float:
     return y + HYDRO_LEGEND_H
 
 
-def draw_hydro_legend_in_map(ax) -> None:
-    """River / lake key inside the map image (ENVI presentation and poster), in an empty corner."""
+def draw_overlay_legend_in_map(ax, ov: dict | None, hydro: bool) -> None:
+    """One box in an empty corner of the map image (ENVI presentation and poster) with the standing-crops key
+    (colours + circle sizes, drawn like the circles on the map) and/or the river / lake key under it.
+    Laid out in points, so it fits at any image size and the two keys never overlap."""
     from matplotlib.lines import Line2D
-    w, h = 0.40, 0.095
-    spot = _find(ax, w, h, [], "top-right") or _find(ax, w, h, [], "bottom-left") or (0.58, 0.90, w, h)
-    x0, y0, _, _ = spot
-    t = ax.transAxes
-    ax.add_patch(FancyBboxPatch((x0, y0), w, h, boxstyle="round,pad=0,rounding_size=0.01", transform=t,
-                                facecolor=(1, 1, 1, 0.92), edgecolor="#555555", lw=0.6, zorder=30))
-    cy = y0 + h * 0.62
-    ax.add_line(Line2D([x0 + 0.02, x0 + 0.07], [cy, cy], transform=t, color=RIVER_COLOR, lw=1.8, zorder=31))
-    ax.text(x0 + 0.08, cy, "River", transform=t, ha="left", va="center", fontsize=7.4, color=INK, zorder=31)
-    ax.add_patch(Rectangle((x0 + 0.17, cy - 0.012), 0.05, 0.024, transform=t, facecolor=WATER_COLOR,
-                           edgecolor=WATER_EDGE, lw=0.5, zorder=31))
-    ax.text(x0 + 0.23, cy, "Lake / reservoir", transform=t, ha="left", va="center", fontsize=7.4, color=INK, zorder=31)
-    ax.text(x0 + 0.02, y0 + 0.016, "© OpenStreetMap contributors", transform=t, ha="left", va="bottom", fontsize=5.6,
-            color="#555555", zorder=31)
-
-
-def draw_crop_legend_in_map(ax, ov: dict) -> None:
-    """Crop colours + size key drawn inside the map image (an empty corner), sized like the circles on the map."""
-    crops = ov.get("crops") or {}
-    mx = overlay_max(ov)
-    if not crops or mx <= 0:
+    crops = (ov or {}).get("crops") or {}
+    mx = overlay_max(ov) if crops else 0
+    show_crops = bool(crops) and mx > 0
+    if not (show_crops or hydro):
         return
+    fig = ax.figure
+    fx = fig.dpi / 72 / ax.bbox.width             # one point as a fraction of the axes width / height
+    fy = fig.dpi / 72 / ax.bbox.height
+    w_pt, pad, row = 140, 6, 12.5
+    sub = f"as of {ov['as_of']}" if show_crops and ov.get("as_of") else ""
     rows = math.ceil(len(crops) / 2)
-    sub = f"as of {ov['as_of']}" if ov.get("as_of") else ""
-    h = 0.035 + (0.022 if sub else 0) + rows * 0.032 + 0.075
-    spot = _find(ax, 0.40, h, [], "bottom-right") or _find(ax, 0.40, h, [], "top-left") or (0.58, 0.02, 0.40, h)
-    x0, y0, w, _ = spot
+    key_h = 2 * CIRCLE_MAX_PT + 2
+    h_pt = 2 * pad
+    if show_crops:
+        h_pt += 11 + (9 if sub else 0) + rows * row + 3 + key_h
+    if hydro:
+        h_pt += (6 if show_crops else 0) + 10 + row
+    w, h = w_pt * fx, h_pt * fy
+    spot = next((s for c in ("bottom-right", "top-left", "bottom-left", "top-right") if (s := _find(ax, w, h, [], c))),
+                (1 - w - 0.015, 0.02, w, h))
+    x0, y0 = spot[0], spot[1]
     t = ax.transAxes
     ax.add_patch(FancyBboxPatch((x0, y0), w, h, boxstyle="round,pad=0,rounding_size=0.01", transform=t,
                                 facecolor=(1, 1, 1, 0.92), edgecolor="#555555", lw=0.6, zorder=30))
-    top = y0 + h - 0.012
-    ax.text(x0 + 0.015, top, "Standing crops (ha)", transform=t, ha="left", va="top", fontsize=7.6,
-            fontweight="bold", color=INK, zorder=31)
-    if sub:
-        top -= 0.022
-        ax.text(x0 + 0.015, top, sub, transform=t, ha="left", va="top", fontsize=6.8, style="italic",
+    X = lambda pt: x0 + pt * fx                    # noqa: E731  (points from the box's left edge)
+    Y = lambda pt: y0 + h - pt * fy                # noqa: E731  (points down from the box's top edge)
+    y = pad
+    if show_crops:
+        ax.text(X(pad), Y(y), "Standing crops (ha)", transform=t, ha="left", va="top", fontsize=7.6,
+                fontweight="bold", color=INK, zorder=31)
+        y += 11
+        if sub:
+            ax.text(X(pad), Y(y), sub, transform=t, ha="left", va="top", fontsize=6.8, style="italic",
+                    color="#555555", zorder=31)
+            y += 9
+        for i, (crop, color) in enumerate(crops.items()):
+            cx, cy = X(pad + 5 + (i % 2) * w_pt / 2), Y(y + (i // 2) * row + row / 2)
+            ax.scatter([cx], [cy], s=60, c=[color], edgecolors="#222222", linewidths=0.5, transform=t, zorder=31)
+            ax.text(cx + 8 * fx, cy, crop, transform=t, ha="left", va="center", fontsize=7.4, color=INK, zorder=31)
+        y += rows * row + 3
+        ky = Y(y + key_h / 2)
+        for j, frac in enumerate((1.0, 0.25)):
+            r = math.sqrt(frac) * CIRCLE_MAX_PT
+            kx = X(pad + CIRCLE_MAX_PT + j * w_pt / 2)
+            ax.scatter([kx], [ky], s=(2 * r) ** 2, facecolors="none", edgecolors="#333333", linewidths=0.6,
+                       transform=t, zorder=31)
+            ax.annotate(f"{mx * frac:,.0f} ha", (kx, ky), xycoords=t, xytext=(r + 3, 0), textcoords="offset points",
+                        ha="left", va="center", fontsize=7.2, color=INK, zorder=31)
+        y += key_h
+    if hydro:
+        if show_crops:
+            ax.add_line(Line2D([X(pad), X(w_pt - pad)], [Y(y + 3)] * 2, transform=t, color="#cccccc", lw=0.5,
+                               zorder=31))
+            y += 6
+        ax.text(X(pad), Y(y), "Rivers & lakes", transform=t, ha="left", va="top", fontsize=7.6,
+                fontweight="bold", color=INK, zorder=31)
+        ax.text(X(w_pt - pad), Y(y + 1.5), "© OpenStreetMap", transform=t, ha="right", va="top", fontsize=5.6,
                 color="#555555", zorder=31)
-    for i, (crop, color) in enumerate(crops.items()):
-        cx = x0 + 0.03 + (i % 2) * w / 2
-        cy = top - 0.036 - (i // 2) * 0.032
-        ax.scatter([cx], [cy], s=80, c=[color], edgecolors="#222222", linewidths=0.5, transform=t, zorder=31)
-        ax.text(cx + 0.022, cy, crop, transform=t, ha="left", va="center", fontsize=7.6, color=INK, zorder=31)
-    ky = y0 + 0.042
-    for j, frac in enumerate((1.0, 0.25)):
-        r = math.sqrt(frac) * CIRCLE_MAX_PT
-        kx = x0 + 0.065 + j * w / 2
-        ax.scatter([kx], [ky], s=(2 * r) ** 2, facecolors="none", edgecolors="#333333", linewidths=0.6, transform=t,
-                   zorder=31)
-        ax.annotate(f"{mx * frac:,.0f} ha", (kx, ky), xycoords=t, xytext=(r + 3, 0), textcoords="offset points",
-                    ha="left", va="center", fontsize=7.4, zorder=31)
+        y += 10
+        cy = Y(y + row / 2)
+        ax.add_line(Line2D([X(pad), X(pad + 16)], [cy, cy], transform=t, color=RIVER_COLOR, lw=1.8, zorder=31))
+        ax.text(X(pad + 20), cy, "River", transform=t, ha="left", va="center", fontsize=7.4, color=INK, zorder=31)
+        lx = pad + 50
+        ax.add_patch(Rectangle((X(lx), cy - 4 * fy), 14 * fx, 8 * fy, transform=t, facecolor=WATER_COLOR,
+                               edgecolor=WATER_EDGE, lw=0.5, zorder=31))
+        ax.text(X(lx + 17), cy, "Lake / reservoir", transform=t, ha="left", va="center", fontsize=7.4, color=INK,
+                zorder=31)

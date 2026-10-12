@@ -223,7 +223,7 @@ def big_date(payload: dict, layer: dict) -> str:
     if lid.startswith("d_"):
         return layer["label"]
     if lid.startswith("m_"):
-        return layer["label"].split(" ")[0]
+        return layer["label"] if payload["type"] == "envi" else layer["label"].split(" ")[0]
     return {"total": "10-day Total", "season_total": "Season Total", "pct_normal": "% of Normal"}.get(
         lid, payload["period"]["label"] if lid == "envi" else layer["label"])
 
@@ -240,8 +240,8 @@ def legend_title(payload: dict, layer: dict) -> tuple[str, str]:
 
 
 def render_layer(payload: dict, layer: dict, out_dir: Path, stem: str, preview: Path | None = None,
-                 preview_px: int = 3000) -> dict:
-    """Render PNG (300 dpi) + vector PDF of one layer. Returns paths, label report and alt text."""
+                 preview_px: int = 3000, pdf: bool = False) -> dict:
+    """Render the PNG (and, with ``pdf=True``, a vector PDF) of one layer. Returns paths, label report and alt text."""
     out_dir.mkdir(parents=True, exist_ok=True)
     st = STYLES.get(payload["type"], DEFAULT_STYLE)
     muni, prov = _areas_for(layer)
@@ -356,19 +356,20 @@ def render_layer(payload: dict, layer: dict, out_dir: Path, stem: str, preview: 
     if PAGASA_LOGO.exists():
         _logo(fig, PAGASA_LOGO, rect(277, 273, 16, 16))
 
-    png, pdf = out_dir / f"{stem}.png", out_dir / f"{stem}.pdf"
+    png, pdf_path = out_dir / f"{stem}.png", (out_dir / f"{stem}.pdf" if pdf else None)
     meta_title = f"{(t.get('title') or payload['title'])} – {layer['label']}"
     report = verify_labels(fig, label_artists)
     report.update({"municipal_label_size_pt": rep_layout["municipal_label_size_pt"],
                    "leader_lines": rep_layout["leader_lines"], "missing": rep_layout["missing"]})
-    fig.savefig(pdf, metadata={"Title": meta_title, "Author": "DA-RFO-CAR AMIA"})
+    if pdf_path:
+        fig.savefig(pdf_path, metadata={"Title": meta_title, "Author": "DA-RFO-CAR AMIA"})
     fig.savefig(png, dpi=DPI, metadata={"Title": meta_title})
     if preview is not None:   # sharp JPG for photo mode, straight from the figure (no reload of the large PNG)
         fig.savefig(preview, dpi=preview_px / max(fig.get_size_inches()), facecolor="white",
                     pil_kwargs={"quality": 92, "optimize": True, "progressive": True, "subsampling": 0})
     plt.close(fig)
     gc.collect()
-    return {"png": png, "pdf": pdf, "preview": preview, "label_report": report, "alt": alt_text(payload, layer)}
+    return {"png": png, "pdf": pdf_path, "preview": preview, "label_report": report, "alt": alt_text(payload, layer)}
 
 
 def payload_issued_label(payload: dict) -> str:

@@ -6,6 +6,7 @@ Each text is kept short (about 230 characters) so it fits the map panel.
 from __future__ import annotations
 
 from ..envi.config import month_label
+from . import common
 
 CROPS = ("rice", "corn", "hvc")
 LABELS = {"rice": "Rice", "corn": "Corn", "hvc": "HVC"}
@@ -23,7 +24,7 @@ def _share(layer: dict, pred) -> float:
 
 def rainfall_dekad(payload: dict) -> dict[str, str]:
     days = [lyr for lyr in payload["layers"] if lyr["id"].startswith("d_")]
-    total = next((lyr for lyr in payload["layers"] if lyr["id"] == "total"), payload["layers"][-1])
+    total = common.total_layer(payload)
     heavy = [d["label"] for d in days if _share(d, lambda v: v >= 75) > 0]
     wet = bool(heavy) or _share(total, lambda v: v >= 150) > 0.2
     dry = _share(total, lambda v: v < 25) > 0.3

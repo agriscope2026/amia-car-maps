@@ -7,11 +7,12 @@ Administrative Region (DA-RFO-CAR), AMIA Program. It has two parts:
   forecasts (mm) and the drought forecast for the 77 municipalities of CAR. It has crop and irrigation overlays,
   an archive, downloads and share links.
 - **Admin workspace:** upload → validate → preview → edit text → generate print-ready exports → publish.
-  - Exports are the map images: every map gets a print-ready PNG (400 dpi) and a PDF, plus one ZIP of all of them.
-    ENVI also gets its presentation (5760×3240) and A4 poster (450 dpi), each as PNG and PDF. Standing crops can be added as proportional circles
+  - Exports are the map images (PNG, no PDFs): every rainfall and drought map gets a print-ready PNG (400 dpi), plus
+    one ZIP of all of them. ENVI gets, for the season outlook and each month, a landscape presentation (5760×3240) and a
+    portrait A4 poster (450 dpi) as PNG images, plus the computation Excel in the ZIP. Standing crops can be added as proportional circles
     (seasonal rainfall, drought and ENVI), with a circle legend.
   - Print maps follow the DA-RFO-CAR sample layouts in `sample data/`. The 10-day forecast has one map per
-    day plus the 10-day total.
+    day; seasonal rainfall one map per month (there are no 10-day or season total maps).
 - **Photo mode** on the dashboard shows the finished map images with the recommendations (the infographic for
   ENVI).
 
@@ -32,7 +33,7 @@ worker/     Python FastAPI render worker – validation, products, exports (depl
   agriclimate/products/ ENVI, 10-day rainfall, seasonal rainfall, drought, crops and irrigation layers
   agriclimate/rainfall_feed.py   10-day rainfall feed (Cordillera weather API)
   agriclimate/pagasa_seasonal.py seasonal rainfall from PAGASA's published tables (CAR rows, OCR)
-  agriclimate/droughtcaster.py   DroughtCaster fetcher interface (+ manual upload fallback)
+  agriclimate/droughtcaster.py   CAR drought outlook from PAGASA DroughtCaster (+ manual upload fallback)
   data/gis, data/gis_template    CAR boundaries (EPSG:4326) and the DA QGIS print templates
   scripts/              build_reference, build_glyphs, build_seed_sql, build_demo, make_demo_samples
 supabase/   migrations/0001_init.sql (PostGIS schema + RLS + storage buckets), seed.sql
@@ -143,7 +144,8 @@ cd web && E2E_EMAIL=admin@example.com E2E_PASSWORD=admin-local-123 node scripts/
 | `EXPORTS_BUCKET` | no | Default `exports` |
 | `OUTPUT_DIR` | no | Working folder for jobs (default `worker/outputs`) |
 | `RAINFALL_FEED_URL` | no | Default `https://cordillera-weather.onrender.com/api/cordillera/full/` |
-| `DROUGHTCASTER_URL` | no | Table in the drought template format, once a source is confirmed |
+| `DROUGHTCASTER_URL` | no | A table in the drought template format at this URL, instead of PAGASA DroughtCaster (default: the DroughtCaster site's data endpoint) |
+| `DROUGHTCASTER_API` | no | Default `https://droughtcaster.pagasa.dost.gov.ph/proxy.php` (the site's JSON endpoint, read per CAR province) |
 | `PAGASA_SEASONAL_URL` | no | Default `https://www.pagasa.dost.gov.ph/climate/climate-prediction/seasonal-forecast` (seasonal forecast tables, read with OCR) |
 | `QGIS_PYTHON` | no | PyQGIS launcher, if QGIS is not found automatically |
 

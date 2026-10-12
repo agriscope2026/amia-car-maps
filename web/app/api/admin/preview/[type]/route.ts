@@ -1,7 +1,8 @@
 import crypto from "crypto";
 import { assertSameOrigin, errorResponse, HttpError, requireRole } from "@/lib/server/auth";
 import { audit } from "@/lib/server/repo";
-import { MAX_UPLOAD_BYTES, signPayload, storeUploads, worker } from "@/lib/server/worker";
+import { loadUpload, MAX_UPLOAD_BYTES, signPayload, storeUploads, worker, type StoredFile } from "@/lib/server/worker";
+import { latestEnviInput } from "@/lib/server/reuse";
 
 const TYPES = ["envi", "rainfall_dekad", "rainfall_seasonal", "drought"];
 const FIELDS: Record<string, string[]> = { envi: ["drought", "damage", "crops"], default: ["file"] };
@@ -30,10 +31,26 @@ export async function POST(req: Request, ctx: { params: Promise<{ type: string }
     const fwd = new FormData();
     fwd.set("settings", settings);
     for (const { field, file } of files) fwd.set(field, file, file.name);
+    // ENVI monthly update: historical damage changes rarely – without a new file, reuse the latest issue's
+    let reused: (StoredFile & { issue: string }) | null = null;
+    if (type === "envi" && !files.some((f) => f.field === "damage") && form.get("reuse_damage") !== "0") {
+      const r = await latestEnviInput("damage");
+      if (r) {
+        fwd.set("damage", await loadUpload(r.file), r.file.filename);
+        reused = { ...r.file, issue: r.issue };
+      }
+    }
     const payload = await worker(`/preview/${type}`, { method: "POST", body: fwd });
     const stored = files.length ? await storeUploads(uploadId, files) : [];
-    await audit(user, "validate", type, uploadId, { files: stored.map((s) => s.filename), ok: payload.ok });
-    return Response.json({ payload, uploadId, files: stored, sig: payload.ok ? signPayload(payload, uploadId) : null });
+    // the reused file stays where it is; the new issue just points to it (its exports read it from there)
+    if (reused) stored.push({ field: reused.field, filename: reused.filename, path: reused.path, sha256: reused.sha256 });
+    await audit(user, "validate", type, uploadId, {
+      files: stored.map((s) => s.filename), ok: payload.ok, ...(reused ? { reused_damage_from: reused.issue } : {}),
+    });
+    return Response.json({
+      payload, uploadId, files: stored, sig: payload.ok ? signPayload(payload, uploadId) : null,
+      reused: reused ? { damage: { filename: reused.filename, issue: reused.issue } } : null,
+    });
   } catch (e) {
     return errorResponse(e);
   }

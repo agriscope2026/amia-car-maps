@@ -227,3 +227,15 @@ def base_texts(product: dict, settings: dict) -> dict:
         "issuing_office": ISSUING_OFFICE,
         "data_credit": settings.get("data_credit") or "DOST-PAGASA",   # "Weather data from: …" on the map
     }
+
+
+def total_layer(payload: dict) -> dict:
+    """The 10-day / season rainfall total per municipality as a layer-like dict (no map of its own): read from the
+    per-area ``total`` / ``season_total`` field of the day or month maps; older payloads still have a total layer."""
+    lid = "total" if payload["type"] == "rainfall_dekad" else "season_total"
+    old = next((lyr for lyr in payload["layers"] if lyr["id"] == lid), None)
+    if old:
+        return old
+    first = payload["layers"][0]
+    return {"id": lid, "label": lid, "unit": "mm",
+            "values": {k: {**v, "value": v.get(lid)} for k, v in first["values"].items()}}

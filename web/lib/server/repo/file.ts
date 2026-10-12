@@ -53,6 +53,7 @@ function toCatalog(v: VersionRecord): CatalogEntry {
     version: v.version,
     synthetic: v.payload?.synthetic,
     layers: (v.payload?.layers ?? []).map((l) => ({ id: l.id, label: l.label })),
+    published_at: v.published_at ?? null,
   };
 }
 

@@ -47,14 +47,14 @@ const CASES = {
     settings: { issue_date: "2026-09-30", period_start: "2026-10-01", period_end: "2026-10-10" },
     files: { file: join(DEMO, "DEMO_rainfall_10day_2026-10-01.xlsx") },
     check: (p) => {
-      assert(p.layers.length === 11 && p.layers[0].id === "d_2026-10-01" && p.layers[10].id === "total", "10 daily maps + 10-day total");
+      assert(p.layers.length === 10 && p.layers[0].id === "d_2026-10-01" && !p.layers.some((l) => l.id === "total"), "10 daily maps, no 10-day total map");
       assert(p.layers[0].unit === "mm" && p.layers[0].legend.classes[1].desc === "Very Light Rain", "DA daily rainfall legend");
     },
   },
   rainfall_seasonal: {
     settings: { issue_date: "2026-09-30", period_start: "2026-10", period_end: "2027-03" },
     files: { file: join(DEMO, "DEMO_rainfall_seasonal_2026-10_2027-03.xlsx") },
-    check: (p) => assert(p.layers.length === 8 && p.layers.some((l) => l.id === "season_total"), "6 months + total + % normal"),
+    check: (p) => assert(p.layers.length === 7 && !p.layers.some((l) => l.id === "season_total"), "6 months + % normal, no season total map"),
   },
   drought: {
     settings: { issue_date: "2026-09-15", period_start: "2026-10" },
@@ -93,28 +93,22 @@ async function publishFlow(name, preview, settings, check) {
   assert(entry, `${name}: on the public catalog`);
   const pub = await call(`/api/public/products/${draft.id}`);
   assert(pub.texts.notes === `E2E test note (${name})`, "edited text published");
-  // exports = map images and PDFs only: one PNG + one PDF per map, one ZIP
   const real = pub.downloads.filter((d) => !d.preview);
-  assert(real.filter((d) => d.kind === "png").length === pub.layers.length, "one PNG per map");
-  assert(real.filter((d) => d.kind === "pdf").length === pub.layers.length, "one PDF per map");
-  assert(real.every((d) => ["png", "pdf", "zip", "presentation", "presentation_pdf", "poster", "poster_pdf"].includes(d.kind)), "only map images, PDFs and the ZIP");
-  const pdf = real.find((d) => d.kind === "pdf");
-  const bytes = new Uint8Array(await call(pdf.url));
-  assert(String.fromCharCode(...bytes.slice(0, 4)) === "%PDF", "public PDF download");
   const zipD = real.find((d) => d.kind === "zip");
   const zip = new Uint8Array(await call(zipD.url));
-  assert(zip[0] === 0x50 && zip[1] === 0x4b, "ZIP of all maps");
+  assert(zip[0] === 0x50 && zip[1] === 0x4b, "ZIP of all images");
   if (pub.type === "envi") {
-    const pres = real.find((d) => d.kind === "presentation");
-    assert(pres && real.find((d) => d.kind === "poster"), "ENVI presentation and poster");
-    const png = new Uint8Array(await call(pres.url));
+    // ENVI: a presentation (landscape) + A4 poster (portrait) PNG for the season outlook and each month; no PDFs
+    const n = pub.layers.filter((l) => l.id === "envi" || l.id.startsWith("m_")).length;
+    assert(real.filter((d) => d.kind === "presentation").length === n, "one presentation per season / month");
+    assert(real.filter((d) => d.kind === "poster").length === n, "one A4 poster per season / month");
+    assert(real.every((d) => ["presentation", "poster", "zip"].includes(d.kind)), "ENVI: presentation and poster PNGs and the ZIP only");
+    const png = new Uint8Array(await call(real.find((d) => d.kind === "presentation").url));
     assert(png[1] === 0x50 && png[2] === 0x4e && png[3] === 0x47, "presentation is a PNG");
-    for (const k of ["presentation_pdf", "poster_pdf"]) {
-      const d = real.find((x) => x.kind === k);
-      assert(d, `ENVI ${k}`);
-      const b = new Uint8Array(await call(d.url));
-      assert(String.fromCharCode(...b.slice(0, 4)) === "%PDF", `${k} is a PDF`);
-    }
+  } else {
+    // one PNG per map, no PDFs
+    assert(real.filter((d) => d.kind === "png").length === pub.layers.length, "one PNG per map");
+    assert(real.every((d) => ["png", "zip"].includes(d.kind)), "only map images and the ZIP");
   }
   cookie = saved;
 

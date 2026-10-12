@@ -62,10 +62,20 @@ def test_drought_export_job_end_to_end(client):
     assert client.get(f"/jobs/{job_id}/files/../../etc/passwd").status_code == 404
 
 
-def test_droughtcaster_without_config(client, monkeypatch):
+def test_droughtcaster_unreachable(client, monkeypatch):
+    """PAGASA DroughtCaster is the default source; when it cannot be reached the admin gets a clear error."""
+    from agriclimate import droughtcaster
+
+    def down(self, client_, name):
+        raise RuntimeError(f"DroughtCaster: {name} could not be fetched (timeout)")
+
     monkeypatch.delenv("DROUGHTCASTER_URL", raising=False)
+    monkeypatch.setattr(droughtcaster.PagasaDroughtCasterFetcher, "_province", down)
+    monkeypatch.setattr(droughtcaster, "STATE_FILE", config.ROOT / "outputs" / "test_droughtcaster_state.json")
     r = client.post("/droughtcaster/fetch", json={}).json()
-    assert r["ok"] is False and r["configured"] is False and "manually" in r["error"]
+    assert r["ok"] is False and r["configured"] is True and "could not be fetched" in r["error"]
+    t = client.post("/droughtcaster/table")
+    assert t.status_code == 502 and "DroughtCaster" in t.json()["detail"]
 
 
 def test_rainfall_feed_draft_and_export_from_payload(client, monkeypatch):
@@ -80,8 +90,8 @@ def test_rainfall_feed_draft_and_export_from_payload(client, monkeypatch):
     assert p["texts"]["recommendations"].startswith("Agricultural advisory")
     # Bangued = sum of its 10 daily values
     bangued = sum(d["rainfall_total"] for d in feed["data"] if d["municity"] == "Bangued")
-    assert p["layers"][-1]["values"]["ABRA|BANGUED"]["value"] == round(bangued, 2)
-    assert len(p["layers"]) == 11 and p["layers"][0]["label"] == "October 5"
+    assert p["layers"][0]["values"]["ABRA|BANGUED"]["total"] == round(bangued, 2)   # kept per area, no total map
+    assert len(p["layers"]) == 10 and p["layers"][0]["label"] == "October 5"
     first_day = next(d["rainfall_total"] for d in feed["data"] if d["municity"] == "Bangued" and d["date"] == "10/5/2026")
     assert p["layers"][0]["values"]["ABRA|BANGUED"]["value"] == round(first_day, 2)
     s = {"texts": {"title": "Edited title"}}

@@ -19,10 +19,18 @@ forecast.
 1. **Period and source.** Enter the issue date (the "as of" date) and the period the map covers:
    - **10-day rainfall:** the first and last day, for example October 1 and October 10, 2026. The template
      has one column per day (DAY_1 … DAY_10, in mm; DAY_1 is the first day). The system makes **one map per day**
-     plus a map of the 10-day total.
+     (no 10-day total map).
    - **Seasonal rainfall and drought:** the first month (and, for seasonal rainfall, the last month).
    - **ENVI:** the weights are drought forecast 50 %, historical damage 25 % and standing crops 25 %. You can
      change them (they must add up to 1), and the way classes are drawn.
+   - **Drought forecast from PAGASA:** on the ENVI and Drought forecast upload pages, **Fetch from PAGASA
+     DroughtCaster** fills in the drought forecast file for the six CAR provinces from
+     https://droughtcaster.pagasa.dost.gov.ph/ and sets the issue date and period from it. Then click **Validate** as
+     for an upload. If PAGASA cannot be reached, upload the template instead.
+   - **ENVI monthly update:** each month, make a new ENVI version with the new drought forecast and the new standing
+     crops. Historical damage can be left empty: the file of the latest ENVI issue is reused (the upload page says
+     which one). Upload a new damage file only when it changes. The new issue gets a season ENVI map plus one map per
+     forecast month, all computed from the new forecast; earlier issues stay in the archive.
 2. **Download the template.** Click **Download template** next to each file. The template already lists all 77
    municipalities (or the 6 provinces for drought). Fill in the values and keep the PSGC, province and
    municipality columns.
@@ -46,9 +54,10 @@ forecast.
    - **Agricultural recommendations:** a draft is written for you from the data. Edit it freely. Put each
      recommendation on its own line starting with "-". **Generate automatically** brings back the suggested
      text. Click **Save text**.
-   - **Generate exports:** this makes, for **every map** (each day, month, season total …), a print-ready
-     **PNG (400 dpi)** and a **PDF**, plus one ZIP with all of them. For ENVI it also makes the **presentation**
-     (5760×3240) and the **A4 poster** (450 dpi), each as PNG and PDF, with the full recommendations. It takes about 12 seconds per map. When it is done, the
+   - **Generate exports:** for rainfall and drought this makes, for **every map** (each day or month), a print-ready
+     **PNG (400 dpi)**, plus one ZIP with all of them (about 12 seconds per map). No PDFs are made. For ENVI it makes, for
+     the season outlook and each month, the **presentation** (landscape, 5760×3240) and the **A4 poster** (portrait,
+     450 dpi) as PNG images, plus one ZIP with them and the computation Excel (about a minute). When it is done, the
      page confirms that all 77 municipality names and 6 province names are visible with no overlapping labels.
      Download and check the files.
    - **Publish** (administrators only): the map appears on the public dashboard straight away. If an earlier
@@ -113,7 +122,8 @@ ENVI.
 
 On the public dashboard, **Photo mode** opens the finished images full screen, with the recommendations beside
 them:
-- **ENVI** shows only the presentation images: the 1920×1080 presentation and the A4 poster.
+- **ENVI** shows the season outlook first, then each month's ENVI, each with its own classes, top 10, crops at risk
+  and recommendations. Switch between **▭ Presentation** (landscape) and **▯ A4** (portrait poster) in the top bar.
 - **Other maps** show the print map for each day or month.
 - **Zoom:** use the + / − / Fit / 100% buttons, the mouse wheel, a double-click, or two fingers on a phone. Drag to
   move around a zoomed image.
@@ -147,7 +157,7 @@ Things to know:
 ## The 10-day rainfall feed
 
 The 10-day rainfall forecast is fetched automatically every morning from the Cordillera weather service. It gives
-daily rainfall, so you get one map per day plus the 10-day total. When a
+daily rainfall, so you get one map per day. When a
 new forecast is available, a draft appears on the **Products** page (author "cron") with its exports already made.
 An administrator only needs to open it, check it, adjust the recommendations if needed, and publish.
 
@@ -161,7 +171,7 @@ Administrators can still change the text of a published version, especially the 
 2. Edit the text (recommendations, farm recommendations for rice, corn and HVC, notes…) and click
    **Save – update the dashboard**. The new text appears on the dashboard and in photo mode
    straight away.
-3. Click **Regenerate exports**. The maps, presentation, poster and PDFs are made again with the new text. Until
+3. Click **Regenerate exports**. The maps, presentation and poster are made again with the new text. Until
    they are ready, the previous files stay available for download.
 
 Every change is recorded in the audit log. Editors can only change drafts.

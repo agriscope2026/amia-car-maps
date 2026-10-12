@@ -63,6 +63,7 @@ def build(files: dict, settings: dict | None = None) -> dict:
     for k, rec in lyr["values"].items():   # the class is the label; keep the index value too
         v = t["envi"].get(k)
         rec["envi"] = None if v is None or pd.isna(v) else round(float(v), 3)
+    layers = [lyr] + monthly_layers(df, t, meta, s, results, keys)
     recs = s.get("recommendations") or recommendations.generate(df, meta, results, s)
     lab = meta["labels"]
     payload.update({
@@ -73,18 +74,60 @@ def build(files: dict, settings: dict | None = None) -> dict:
                    "end": pd.Period(s["period_end"], "M").end_time.date().isoformat(), "label": lab["period"]},
         "level": meta["level"],
         "source": settings.get("source") or DEFAULT_SOURCE,
-        "layers": [lyr],
+        "layers": layers,
         "summary": {k: meta["summary"][k] for k in ("class_counts", "crop_at_risk_ha", "crop_at_risk_by_crop",
                                                    "crop_total_ha", "n_at_risk", "top10", "hotspots")},
         "method": {"weights": meta["weights"], "classification": meta["classification"], "breaks": meta["breaks"],
                    "hazard": meta["hazard_note"] + f" Normalized: {meta['hazard_method']}.",
                    "damage": meta["damage_note"], "crops": meta["crops_note"],
-                   "formula": "ENVI = Σ weight × min–max normalized indicator"},
+                   "formula": "ENVI = Σ weight × min–max normalized indicator",
+                   "monthly": "Monthly ENVI: drought part = that month's forecast score ÷ 3 (not affected 0, dry "
+                              "condition 1, dry spell 2, drought 3); damage and standing crops as in the season ENVI."},
     })
     payload["texts"] = common.base_texts(payload, {**settings, "recommendations": recs})
     payload["texts"]["legend_title"] = "Vulnerability class (ENVI)"
     payload["recommendations_source"] = "edited" if settings.get("recommendations") else "auto"
     return payload
+
+
+def month_keys(names: list[str], start: str, end: str) -> dict[str, str]:
+    """Outlook month names ('October', …) → 'YYYY-MM' within the period (the first match from the start)."""
+    out = {}
+    for p in pd.period_range(start, end, freq="M"):
+        name = p.strftime("%B")
+        if name in names and name not in out:
+            out[name] = p.strftime("%Y-%m")
+    return out
+
+
+def monthly_layers(df: pd.DataFrame, t: pd.DataFrame, meta: dict, s: dict, results: dict, keys) -> list[dict]:
+    """One ENVI layer per outlook month (m_YYYY-MM), after the season layer; same legend, own class ranges, and
+    the month's own draft recommendations (its forecast and its High / Very High areas)."""
+    months = index.monthly_envi(t.reset_index(), meta, s, results["drought"].report)
+    yms = month_keys(list(months), s["period_start"], s["period_end"])
+    out = []
+    for name, f in months.items():
+        if name not in yms:
+            continue
+        f = f.set_axis(t.index)
+        legend = classes.preset("envi")
+        br = f.attrs["breaks"]
+        for i, c in enumerate(legend["classes"]):
+            c["lo"], c["hi"] = round(float(br[i]), 4), round(float(br[i + 1]), 4)
+        extra = {c: f[c] for c in ["rank", "hazard_raw", "hazard_norm", "damage_norm", "crops_norm"]}
+        extra.update({c: t[c] for c in ["damage_raw", "crops_raw"]})
+        if f"cat_{name}" in t:
+            extra["drought_category"] = t[f"cat_{name}"]
+        label = pd.Period(yms[name], "M").strftime("%B %Y")
+        lyr = common.layer(f"m_{yms[name]}", label, "envi_class", "class", legend,
+                           f["envi_class"].where(f["envi"].notna()).reindex(keys), extra)
+        for k, rec in lyr["values"].items():
+            v = f["envi"].get(k)
+            rec["envi"] = None if v is None or pd.isna(v) else round(float(v), 3)
+        d, m = index.month_view(df, meta, name, f.reset_index(drop=True), label)
+        lyr["recommendations"] = recommendations.generate(d, m, results, s)
+        out.append(lyr)
+    return out
 
 
 def crop_table(payload: dict) -> dict[str, dict[str, float]]:

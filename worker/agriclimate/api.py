@@ -10,6 +10,7 @@ Endpoints
   GET  /jobs/{id}                 status, progress, manifest, uploaded object paths
   GET  /jobs/{id}/files/{path}    download an export (local mode)
   POST /droughtcaster/fetch       fetch + build a draft (never publishes)
+  POST /droughtcaster/table       CAR outlook from PAGASA DroughtCaster as a drought-template CSV (upload forms)
   GET  /droughtcaster/status
   POST /feeds/rainfall_dekad/fetch  10-day rainfall from the Cordillera weather API → draft payload
   POST /feeds/rainfall_seasonal/fetch  seasonal rainfall read from PAGASA's seasonal forecast page → draft
@@ -253,9 +254,21 @@ def droughtcaster_fetch(settings: dict | None = None):
     return droughtcaster.run_once(settings or {})
 
 
+@app.post("/droughtcaster/table", dependencies=[Depends(auth)])
+def droughtcaster_table():
+    """The CAR drought outlook from PAGASA DroughtCaster as a drought-template CSV (for the ENVI and drought
+    upload forms) with its issue date and outlook months."""
+    try:
+        return {"ok": True, **droughtcaster.fetch_table()}
+    except Exception as e:  # noqa: BLE001
+        droughtcaster.record({"last_attempt": exports.now_manila(), "last_error": str(e)})
+        raise HTTPException(502, f"PAGASA DroughtCaster could not be reached: {e}") from e
+
+
 @app.get("/droughtcaster/status", dependencies=[Depends(auth)])
 def droughtcaster_status():
-    return {"configured": bool(os.environ.get("DROUGHTCASTER_URL")), **droughtcaster.last_state()}
+    return {"configured": True, "source": os.environ.get("DROUGHTCASTER_URL") or droughtcaster.PAGASA_BASE,
+            **droughtcaster.last_state()}
 
 
 def _with_drafts(p: dict | None) -> None:

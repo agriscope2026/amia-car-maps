@@ -385,7 +385,6 @@ function areaHtml(f: MapGeoJSONFeature, props: MapViewProps) {
     }
     if (payload.type === "rainfall_seasonal" && v) {
       const extra = [
-        typeof v.season_total === "number" ? `<tr><th>Season total</th><td>${fmtNumber(v.season_total)} mm</td></tr>` : "",
         typeof v.pct_normal === "number" ? `<tr><th>% of normal</th><td>${fmtNumber(v.pct_normal, 0)}%</td></tr>` : "",
       ].join("");
       if (extra) html += `<table class="pp-table">${extra}</table>`;

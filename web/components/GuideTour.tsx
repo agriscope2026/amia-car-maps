@@ -134,7 +134,7 @@ export const GUIDE_STEPS: GuideStep[] = [
     title: "8. Download the maps",
     body: (
       <>
-        <p>Tap <strong>⤓ PNG</strong> for an image or <strong>⤓ PDF</strong> to print. The map you are viewing is highlighted.</p>
+        <p>Tap <strong>⤓ PNG</strong> to download an image. The map you are viewing is highlighted.</p>
         <p>The button at the bottom downloads every map in one ZIP file.</p>
       </>
     ),

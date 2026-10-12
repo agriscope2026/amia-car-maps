@@ -24,7 +24,7 @@ export const supabaseRepo: Repo = {
   async listPublished() {
     const { data, error } = await supabasePublic()
       .from("product_versions")
-      .select("id, version, title, period:payload->period, issued:payload->>issued, synthetic:payload->synthetic, layers:payload->layers, products!inner(type)")
+      .select("id, version, title, published_at, period:payload->period, issued:payload->>issued, synthetic:payload->synthetic, layers:payload->layers, products!inner(type)")
       .eq("status", "published");
     if (error) throw error;
     return (data ?? []).map((r: any) => ({
@@ -35,6 +35,7 @@ export const supabaseRepo: Repo = {
       period: r.period,
       status: "published" as const,
       version: r.version,
+      published_at: r.published_at ?? null,
       synthetic: r.synthetic ?? false,
       layers: (r.layers ?? []).map((l: any) => ({ id: l.id, label: l.label })),
     }));

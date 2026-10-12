@@ -132,21 +132,31 @@ def _content(meta: dict) -> dict:
     n_months = len(meta.get("hazard_months") or []) or "outlook"
     years = ", ".join(meta.get("damage_years") or [])
     years_txt = f" ({years})" if years else ""
-    if meta.get("hazard_type") == "numeric":
+    month = meta.get("month")   # monthly ENVI: that month's drought forecast only
+    if month and meta.get("hazard_type") == "numeric":
+        hazard = f"PAGASA outlook for {month}, by province (min–max within the month)."
+    elif month:
+        hazard = (f"PAGASA outlook for {month}, by province. Not affected = 0, dry condition = 1, dry spell = 2, "
+                  "drought = 3, divided by 3.")
+    elif meta.get("hazard_type") == "numeric":
         hazard = f"PAGASA monthly outlook for {lab['period']}, by province; mean of the monthly values."
     else:
         hazard = (f"PAGASA monthly outlook for {lab['period']}, by province. Not affected = 0, dry condition = 1, "
                   f"dry spell = 2, drought = 3, summed over the {n_months} months.")
+    when = f"{month} forecast  ·  season {lab['period']}" if month else f"Season outlook: {lab['period']}"
     return {
-        "title": "El Niño Vulnerability Index (ENVI) – Cordillera Administrative Region",
-        "subtitle": f"Outlook: {lab['period']}  ·  as of {lab['issued']}  ·  "
-                    "drought forecast + historical El Niño damage + standing crops",
+        "title": (f"El Niño Vulnerability Index (ENVI) – {month} – CAR" if month
+                  else "El Niño Vulnerability Index (ENVI) – Cordillera Administrative Region"),
+        "subtitle": f"{when}  ·  as of {lab['issued']}  ·  drought forecast + historical El Niño damage + standing crops",
         "overview": (f"This map combines the drought hazard forecast, historical El Niño crop damage and the standing "
                      f"rice and corn area of CAR's {meta['n_areas']} {level} into one index. It is meant to guide "
                      "mitigation, pre-positioning of resources and emergency response during the El Niño dry spell."),
-        "method": ("Each indicator is rescaled to 0–1 with min–max normalization, x′ = (x − min) / (max − min), "
-                   "where higher always means more vulnerable. ENVI is the weighted sum of the normalized "
-                   f"indicators. Classes: {meth}."),
+        "method": ((f"The {month} drought score is divided by 3; historical damage and standing crops are rescaled "
+                    "to 0–1 with min–max normalization, x′ = (x − min) / (max − min). Higher always means more "
+                    f"vulnerable. ENVI is the weighted sum. Classes: {meth}.") if month else
+                   ("Each indicator is rescaled to 0–1 with min–max normalization, x′ = (x − min) / (max − min), "
+                    "where higher always means more vulnerable. ENVI is the weighted sum of the normalized "
+                    f"indicators. Classes: {meth}.")),
         "indicators": [
             (f"Drought forecast ({pct['hazard']}):", hazard),
             (f"Historical damage ({pct['damage']}):",
@@ -154,9 +164,10 @@ def _content(meta: dict) -> dict:
             (f"Standing crops ({pct['crops']}):",
              f"rice + corn standing area (ha) as of {lab['crops_as_of']}."),
         ],
-        "footnote": (f"Indicators: drought forecast, historical El Niño damage, standing crops  ·  Min–max "
-                     f"normalization (0–1)  ·  Weights: {pct['hazard']} / {pct['damage']} / {pct['crops']}  ·  "
-                     f"Period: {lab['period']}  ·  Issued: {lab['issued']}"),
+        "footnote": (f"Indicators: drought forecast, historical El Niño damage, standing crops  ·  "
+                     + ("Drought ÷ 3, damage and crops min–max (0–1)" if month else "Min–max normalization (0–1)")
+                     + f"  ·  Weights: {pct['hazard']} / {pct['damage']} / {pct['crops']}  ·  "
+                     + (f"Month: {month}  ·  " if month else "") + f"Period: {lab['period']}  ·  Issued: {lab['issued']}"),
         "sources": (f"Data sources: DOST-PAGASA drought forecast ({lab['period']}); DA-RFO-CAR historical El Niño "
                     f"damage logs{years_txt}; DA-RFO-CAR standing crops inventory as of {lab['crops_as_of']}. "
                     "Map: DA-RFO-CAR AMIA."),
@@ -454,7 +465,8 @@ def build_poster(meta: dict, map_png: Path, out: Path, recommendations: str = ""
     cv = Canvas(int(W * s), int(H * s), s)
     c = _content(meta)
     lab = meta.get("labels") or config.period_labels()
-    c["subtitle"] = f"Outlook: {lab['period']}  ·  as of {lab['issued']}"
+    c["subtitle"] = (f"{meta['month']} forecast  ·  season {lab['period']}  ·  as of {lab['issued']}" if meta.get("month")
+                     else f"Season outlook: {lab['period']}  ·  as of {lab['issued']}")
     recs = (recommendations or "").strip()
     map_h = 800 if recs else 1110
     top = _header(cv, W, c, title_size=30, sub_size=19, logo_h=84, y=24)

@@ -41,6 +41,7 @@ export interface Layer {
   unit: string;
   legend: Legend;
   values: Record<string, AreaValue>;
+  recommendations?: string; // ENVI monthly layers: draft recommendations for that month
 }
 
 export interface Period {
@@ -114,6 +115,7 @@ export interface CatalogEntry {
   version: number;
   synthetic?: boolean;
   layers: { id: string; label: string }[];
+  published_at?: string | null; // when this version went live (the dashboard's "new update" notice)
 }
 
 export interface CropsLayer {

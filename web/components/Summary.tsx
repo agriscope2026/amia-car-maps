@@ -40,29 +40,32 @@ function ClassBars({ layer }: { layer: Layer }) {
 
 export function Summary({ payload, layer, crops, names }: { payload: Payload; layer: Layer; crops: CropsLayer | null; names: Names }) {
   if (payload.type === "envi") {
-    const s = payload.summary;
+    // from the layer on screen: the season ENVI or one month's
+    const rows = Object.entries(layer.values).filter(([, v]) => typeof v.envi === "number");
+    const risk = rows.filter(([, v]) => v.class === "High" || v.class === "Very High");
+    const cropsAtRisk = risk.reduce((s, [, v]) => s + (typeof v.crops_raw === "number" ? v.crops_raw : 0), 0);
+    const top = [...rows].sort((a, b) => (b[1].envi as number) - (a[1].envi as number)).slice(0, 10);
     return (
       <div className="summary">
+        {layer.id.startsWith("m_") && <p className="hint">{layer.label}: drought forecast of this month only.</p>}
         <div className="cards">
           <div className="card risk">
-            <div className="big">{fmtNumber(s.crop_at_risk_ha, 0)} ha</div>
+            <div className="big">{fmtNumber(cropsAtRisk, 0)} ha</div>
             <div>standing crops in High + Very High areas</div>
           </div>
           <div className="card">
-            <div className="big">{s.n_at_risk}</div>
+            <div className="big">{risk.length}</div>
             <div>municipalities High or Very High</div>
           </div>
         </div>
         <ClassBars layer={layer} />
         <h3>Most vulnerable areas</h3>
         <ol className="top">
-          {s.top10.map((r: any) => (
-            <li key={r.rank}>
-              <span>
-                {r.area} <span className="muted">({r.province})</span>
-              </span>
-              <span className="pill" style={{ background: r.color }}>
-                {r.envi.toFixed(3)} · {r.class}
+          {top.map(([k, v]) => (
+            <li key={k}>
+              <span>{names[k] ?? nameOf(payload, k)}</span>
+              <span className="pill" style={{ background: v.color }}>
+                {(v.envi as number).toFixed(3)} · {v.class}
               </span>
             </li>
           ))}

@@ -18,6 +18,11 @@ export default function About() {
 
       <section id="envi">
         <h2>El Niño Vulnerability Index (ENVI)</h2>
+        <blockquote className="plain-quote">
+          <strong>In short:</strong> a municipality is more vulnerable to El Niño when drought is forecast there, when El
+          Niño has damaged its crops before, and when it has a lot of standing crops in the field. The higher all
+          three are, the higher its El Niño vulnerability.
+        </blockquote>
         <p>The index combines three indicators for each municipality:</p>
         <ul>
           <li>
@@ -33,18 +38,44 @@ export default function About() {
         </ul>
         <p>
           Each indicator is min–max normalized to 0–1 (0 when all values are equal). The index is the weighted sum of the
-          normalized indicators, using equal weights (⅓ each) unless stated otherwise. The index is split into five classes
+          normalized indicators. By default drought forecast counts for half (0.5) and historical damage and standing crops
+          for a quarter each (0.25); a map states other weights if they were used:
+        </p>
+        <div className="formula" role="math" aria-label="x norm equals x minus x min, divided by x max minus x min">
+          x<sub>norm</sub> = (x − x<sub>min</sub>) / (x<sub>max</sub> − x<sub>min</sub>)
+        </div>
+        <div
+          className="formula"
+          role="math"
+          aria-label="ENVI equals w drought times drought norm, plus w damage times damage norm, plus w crops times crops norm"
+        >
+          ENVI = w<sub>D</sub> · Drought<sub>norm</sub> + w<sub>H</sub> · Damage<sub>norm</sub> + w<sub>C</sub> ·
+          Crops<sub>norm</sub>
+        </div>
+        <p className="small muted">
+          where x<sub>min</sub> and x<sub>max</sub> are the lowest and highest values of that indicator across all areas,
+          and the weights w<sub>D</sub> + w<sub>H</sub> + w<sub>C</sub> = 1 (default 0.5, 0.25 and 0.25). ENVI ranges from 0 (least
+          vulnerable) to 1 (most vulnerable). If any indicator is missing for an area, its ENVI is “No data”.
+        </p>
+        <p>
+          The index is split into five classes
           using equal intervals: Very Low &lt; 0.2, Low 0.2–0.4, Moderate 0.4–0.6, High 0.6–0.8 and Very High ≥ 0.8.
           Municipalities without data are hatched grey (“No data”). “Crop area at risk” is the standing crop area in the High
           and Very High municipalities.
+        </p>
+        <p>
+          <strong>Monthly ENVI.</strong> Besides the season map, there is one ENVI map per outlook month. It uses only that
+          month’s drought forecast, scaled as score ÷ 3 (not affected 0, dry condition 0.33, dry spell 0.67, drought 1).
+          Historical damage and standing crops are the same as in the season map. A fixed scale is used so that a month with
+          drought everywhere still counts fully; min–max would turn identical values into 0.
         </p>
       </section>
 
       <section id="rainfall_dekad">
         <h2>10-day rainfall forecast</h2>
         <p>
-          Shows the forecast rainfall total for one dekad (10 days), in <strong>millimetres (mm)</strong>, by municipality.
-          Default classes are 0–10, 10–25, 25–50, 50–100, 100–150 and 150–200 mm, plus a class above 200 mm. A value equal
+          Shows the forecast rainfall for each day of one dekad (10 days), in <strong>millimetres (mm)</strong>, by
+          municipality, one map per day. Default classes are 0–10, 10–25, 25–50, 50–100, 100–150 and 150–200 mm, plus a class above 200 mm. A value equal
           to a class break belongs to the higher class (10 mm is in “10–25”). Each map states the dates it covers.
         </p>
       </section>
@@ -53,7 +84,7 @@ export default function About() {
         <h2>Seasonal rainfall forecast</h2>
         <p>
           There is one map per month (classes 0–50, 50–100, 100–200, 200–300, 300–400 and 400–500 mm, plus a class above
-          500 mm) and one map of the season total. When the source provides percent of normal, an extra map shows: way below
+          500 mm). When the source provides percent of normal, an extra map shows: way below
           normal (≤ 40%), below normal (41–80%), near normal (81–120%) and above normal (&gt; 120%).
         </p>
         <p>1 mm of rainfall = 1 litre of water per square metre, or 10 m³ per hectare.</p>

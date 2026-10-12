@@ -18,28 +18,29 @@ export interface Photo {
 
 const href = (d?: Download) => d?.url ?? d?.path;
 
+export type PhotoView = "landscape" | "portrait";
+
 /**
  * Photos for photo mode.
- *  - ENVI: only the presentation images – the 1920×1080 presentation (infographic with recommendations) and the
- *    A4 poster.
+ *  - ENVI: the season outlook first, then each month's ENVI – as the landscape presentation or the portrait A4
+ *    poster (`view`), falling back to the print map when neither was generated.
  *  - Other products: one finished print map per day / month / layer.
  */
-export function photosOf(payload: Payload | null): Photo[] {
+export function photosOf(payload: Payload | null, view: PhotoView = "landscape"): Photo[] {
   const dl = payload?.downloads ?? [];
   if (!payload || !dl.length) return [];
   const pick = (files: Download[], ...kinds: string[]) => kinds.map((k) => files.find((d) => d.kind === k)).find(Boolean);
   if (payload.type === "envi") {
     const out: Photo[] = [];
-    const pres = pick(dl, "presentation_web", "presentation", "infographic");
-    if (pres)
-      out.push({ id: "presentation", label: "Presentation", src: href(pres)!, alt: pres.alt ?? "ENVI presentation",
-        pkg: href(pick(dl, "presentation")), print: href(pick(dl, "presentation_pdf")) });
-    const poster = pick(dl, "poster_web", "poster");
-    if (poster)
-      out.push({ id: "poster", label: "A4 poster", src: href(poster)!, alt: "ENVI A4 poster with the full recommendations",
-        pkg: href(pick(dl, "poster")), print: href(pick(dl, "poster_pdf")) });
-    const map = pick(dl.filter((d) => d.layer === "envi"), "jpg", "png");
-    if (!out.length && map) out.push({ id: "map", label: "Map", src: href(map)!, alt: map.alt ?? "ENVI map" });
+    for (const l of payload.layers.filter((x) => x.id === "envi" || x.id.startsWith("m_"))) {
+      const files = dl.filter((d) => d.layer === l.id);
+      const [web, full, pdf] = view === "portrait" ? ["poster_web", "poster", "poster_pdf"] : ["presentation_web", "presentation", "presentation_pdf"];
+      const img = pick(files, web, full, "jpg", "png");
+      if (!img) continue;
+      const label = l.id === "envi" ? `Season outlook (${payload.period.label})` : l.label;
+      out.push({ id: l.id, layer: l.id, label, src: href(img)!, alt: img.alt ?? `ENVI ${label}`,
+        pkg: href(pick(files, full, "png")), print: href(pick(files, pdf, "pdf")) });
+    }
     return out;
   }
   const by = new Map<string, Download[]>();
@@ -62,7 +63,10 @@ export default function PhotoMode({ payload, layerId, onLayer, onClose }: {
   onLayer: (id: string) => void;
   onClose: () => void;
 }) {
-  const photos = useMemo(() => photosOf(payload), [payload]);
+  // ENVI: landscape presentation or portrait A4 poster, for the season outlook and every month
+  const [view, setView] = useState<PhotoView>("landscape");
+  const hasPosters = payload.type === "envi" && (payload.downloads ?? []).some((d) => d.kind === "poster_web" || d.kind === "poster");
+  const photos = useMemo(() => photosOf(payload, view), [payload, view]);
   const byLayer = photos.some((p) => p.layer);
   const [own, setOwn] = useState(0); // index for photos that are not tied to a map layer (ENVI)
   // details (downloads, recommendations): beside the photo on wide screens, folded away elsewhere so the photo gets the room
@@ -110,7 +114,9 @@ export default function PhotoMode({ payload, layerId, onLayer, onClose }: {
   }, [idx, photos]);
 
   const t = payload.texts;
-  const recs = (t.recommendations ?? "").split("\n").filter((l) => l.trim());
+  // a month of ENVI has its own recommendations (its forecast, its High / Very High areas)
+  const layerRecs = payload.layers.find((l) => l.id === cur?.layer)?.recommendations;
+  const recs = (layerRecs ?? t.recommendations ?? "").split("\n").filter((l) => l.trim());
 
   return (
     <div className="photo" role="dialog" aria-modal="true" aria-label={`Photo mode – ${t.title}`} ref={dialog} tabIndex={-1}>
@@ -125,6 +131,16 @@ export default function PhotoMode({ payload, layerId, onLayer, onClose }: {
           <span className="photo-count">
             {idx + 1} / {photos.length}
           </span>
+        )}
+        {hasPosters && (
+          <div className="photo-view" role="radiogroup" aria-label="Image format">
+            {(["landscape", "portrait"] as const).map((v) => (
+              <button key={v} role="radio" aria-checked={view === v} className={`photo-btn ${view === v ? "on" : ""}`} onClick={() => setView(v)}
+                title={v === "landscape" ? "Presentation (landscape)" : "A4 poster (portrait)"}>
+                {v === "landscape" ? "▭" : "▯"}<span className="photo-btn-label"> {v === "landscape" ? "Presentation" : "A4"}</span>
+              </button>
+            ))}
+          </div>
         )}
         {cur && (
           <a className="photo-btn" href={cur.pkg ?? cur.print ?? cur.src} download title={cur.pkg ? "Download PNG (high definition)" : "Download image"}>

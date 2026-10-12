@@ -5,6 +5,7 @@ ENVI uses the prototype's ``envi.recommendations.generate``.
 from __future__ import annotations
 
 from .. import reference
+from . import common
 
 
 def _list(items: list[str]) -> str:
@@ -24,7 +25,7 @@ def _short(names: list[str], n: int = 12) -> str:
 
 
 def rainfall_dekad(payload: dict) -> str:
-    lyr = next((x for x in payload["layers"] if x["id"] == "total"), payload["layers"][-1])
+    lyr = common.total_layer(payload)
     period = payload["period"]["label"]
     heavy_days = []
     for d in payload["layers"]:
@@ -58,7 +59,7 @@ def rainfall_dekad(payload: dict) -> str:
 
 
 def rainfall_seasonal(payload: dict) -> str:
-    season = next(lyr for lyr in payload["layers"] if lyr["id"] == "season_total")
+    season = common.total_layer(payload)
     pct = next((lyr for lyr in payload["layers"] if lyr["id"] == "pct_normal"), None)
     months = payload["layers"][:len(payload["period"].get("months", []))]
     lines = [f"Agricultural advisory for the season {payload['period']['label']}:"]

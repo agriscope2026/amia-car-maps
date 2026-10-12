@@ -1,9 +1,11 @@
 "use client";
 
-import { useEffect, useMemo, useRef } from "react";
-import type { CropsLayer, Gazetteer, Layer, Payload } from "@/lib/types";
+import { useEffect, useMemo, useRef, useState } from "react";
+import type { CropsLayer, Gazetteer, Layer, Payload, ProductType } from "@/lib/types";
 import { fmtDate, fmtNumber, fmtValue } from "@/lib/format";
+import { changeMeaning, enviParts, layerBreaks, type Change, type TrendPoint } from "@/lib/insights";
 import { FarmAdvice } from "./FarmAdvice";
+import { EnviBar, Trends } from "./Insights";
 
 const ENVI_ROWS: [string, string, (v: number) => string][] = [
   ["envi", "ENVI value", (v) => v.toFixed(3)],
@@ -32,12 +34,14 @@ function localLines(text: string, name: string, province: string): string[] {
     .filter((l) => l && (l.toLowerCase().includes(n) || l.toLowerCase().includes(p)));
 }
 
-export default function AreaDialog({ areaKey, geo, payload, layer, crops, onLayer, onPhoto, onClose }: {
+export default function AreaDialog({ areaKey, geo, payload, layer, crops, change, compared, onLayer, onPhoto, onClose }: {
   areaKey: string;
   geo: Gazetteer;
   payload: Payload | null;
   layer: Layer | null;
   crops: CropsLayer | null;
+  change?: Change; // class change since the previous issue (on the compared layer)
+  compared?: { layer: string; issue: string } | null; // what was compared, null when there is no previous issue
   onLayer: (id: string) => void;
   onPhoto?: () => void;
   onClose: () => void;
@@ -59,9 +63,29 @@ export default function AreaDialog({ areaKey, geo, payload, layer, crops, onLaye
   const series = useMemo(() => payload?.layers.filter((l) => /^(d_|m_)/.test(l.id)) ?? [], [payload]);
   const cropRows = crops ? crops.crops.map((c) => [c, crops.values[areaKey]?.[c] ?? 0] as [string, number]).filter(([, ha]) => ha > 0) : [];
   const cropMax = Math.max(1, ...cropRows.map(([, ha]) => ha));
-  const recs = payload?.texts.recommendations ?? "";
+  const recs = layer?.recommendations ?? payload?.texts.recommendations ?? ""; // ENVI month: its own
   const local = localLines(recs, name, province);
   const t = payload?.texts;
+  // ENVI: the map on screen (season or one month) explains itself
+  const enviV = payload?.type === "envi" ? (layer ?? payload.layers[0])?.values[areaKey] : undefined;
+  const enviWhen = payload?.type === "envi" && layer?.id.startsWith("m_") ? ` in ${layer.label}` : "";
+  const parts = enviParts(enviV, payload?.method?.weights);
+  const m = payload ? changeMeaning(payload.type) : null;
+
+  // this area over past issues (ENVI, 10-day and season rainfall)
+  const [history, setHistory] = useState<Partial<Record<ProductType, TrendPoint[]>> | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    setHistory(null);
+    fetch(`/api/public/history?area=${encodeURIComponent(areaKey)}`)
+      .then((r) => (r.ok ? r.json() : { series: {} }))
+      .then((d) => !cancelled && setHistory(d.series ?? {}))
+      .catch(() => !cancelled && setHistory({}));
+    return () => {
+      cancelled = true;
+    };
+  }, [areaKey]);
+  const brief = (q: string) => `/brief?product=${encodeURIComponent(payload?.id ?? "")}${layer ? `&layer=${encodeURIComponent(layer.id)}` : ""}&${q}`;
 
   return (
     <div className="dlg-backdrop" onClick={onClose}>
@@ -104,6 +128,25 @@ export default function AreaDialog({ areaKey, geo, payload, layer, crops, onLaye
               <div className="dlg-muted">
                 {payload.period.label} · as of {fmtDate(payload.issued)}
               </div>
+              {compared && m && (
+                <div className="dlg-change">
+                  {change ? (
+                    <span style={{ color: change.dir > 0 ? m.upColor : m.downColor }}>
+                      {change.dir > 0 ? "▲" : "▼"} {change.dir > 0 ? "Up" : "Down"} from <strong>{change.from}</strong> to <strong>{change.to}</strong> ({change.dir > 0 ? m.up : m.down})
+                    </span>
+                  ) : (
+                    <span>● No change in class</span>
+                  )}
+                  <span className="dlg-muted"> since the {compared.issue} issue{compared.layer !== layer.label ? ` · ${compared.layer}` : ""}</span>
+                </div>
+              )}
+            </section>
+          )}
+
+          {enviV && parts && typeof enviV.envi === "number" && (
+            <section className="dlg-card">
+              <h3>Why is {name} {enviV.class}{enviWhen}?</h3>
+              <EnviBar name={name} cls={enviV.class} envi={enviV.envi} parts={parts} breaks={layerBreaks(layer, payload?.method?.breaks)} />
             </section>
           )}
 
@@ -117,16 +160,15 @@ export default function AreaDialog({ areaKey, geo, payload, layer, crops, onLaye
                     <button key={l.id} className={l.id === layer?.id ? "on" : ""} onClick={() => onLayer(l.id)} title={`Show ${l.label} on the map`}>
                       <span className="dlg-chip" style={{ background: x?.color ?? "#d9d9d9" }} />
                       <span className="dlg-s-label">{shortLabel(l.label)}</span>
-                      <span className="dlg-s-val">{typeof x?.value === "number" ? `${fmtNumber(x.value, 0)}${l.unit === "%" ? "%" : ""}` : x?.value ?? "–"}</span>
+                      <span className="dlg-s-val">
+                        {typeof x?.envi === "number" ? x.envi.toFixed(2) : typeof x?.value === "number" ? `${fmtNumber(x.value, 0)}${l.unit === "%" ? "%" : ""}` : x?.value ?? "–"}
+                      </span>
                     </button>
                   );
                 })}
               </div>
-              {payload?.type === "rainfall_seasonal" && v && (
-                <p className="dlg-muted">
-                  {typeof v.season_total === "number" && <>Season total: <strong>{fmtNumber(v.season_total as number)} mm</strong></>}
-                  {typeof v.pct_normal === "number" && <> · {fmtNumber(v.pct_normal as number, 0)}% of normal</>}
-                </p>
+              {payload?.type === "rainfall_seasonal" && typeof v?.pct_normal === "number" && (
+                <p className="dlg-muted">Season: {fmtNumber(v.pct_normal as number, 0)}% of normal</p>
               )}
             </section>
           )}
@@ -146,6 +188,11 @@ export default function AreaDialog({ areaKey, geo, payload, layer, crops, onLaye
               </table>
             </section>
           )}
+
+          <section className="dlg-card">
+            <h3>Trend over past issues</h3>
+            <Trends series={history} />
+          </section>
 
           {cropRows.length > 0 && (
             <section className="dlg-card">
@@ -203,6 +250,18 @@ export default function AreaDialog({ areaKey, geo, payload, layer, crops, onLaye
         </div>
 
         <footer className="dlg-foot">
+          {payload?.id && (
+            <>
+              <a className="btn secondary" href={brief(`area=${encodeURIComponent(areaKey)}`)} target="_blank" rel="noopener">
+                📄 Brief: {name}
+              </a>
+              {province && (
+                <a className="btn secondary" href={brief(`province=${encodeURIComponent(province)}`)} target="_blank" rel="noopener">
+                  📄 Brief: {province}
+                </a>
+              )}
+            </>
+          )}
           {onPhoto && (
             <button className="btn secondary" onClick={onPhoto}>
               🖼 Open the map images

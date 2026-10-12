@@ -161,7 +161,7 @@ export default function VersionEditor({ version, role, geo }: { version: any; ro
         {live && editable && (
           <p className="msg warn">
             This version is <strong>live on the dashboard</strong>. Saved text changes, including the recommendations, appear
-            there immediately. Then click <strong>Regenerate exports</strong> so the images, PDFs and presentation show them too.
+            there immediately. Then click <strong>Regenerate exports</strong> so the images and presentation show them too.
           </p>
         )}
         {!editable && (
@@ -239,9 +239,9 @@ export default function VersionEditor({ version, role, geo }: { version: any; ro
       <section>
         <h2>Exports</h2>
         <p className="muted small">
-          For every map: a print-ready PNG (400 dpi) and a PDF, plus one ZIP with all of them
-          {version.type === "envi" ? "; for ENVI also the presentation (5760×3240) and the A4 poster (450 dpi), each as PNG and PDF" : ""}. About 12 seconds per
-          map.
+          {version.type === "envi"
+            ? "For the season outlook and each month: a landscape presentation (5760×3240) and a portrait A4 poster (450 dpi), as PNG images, plus one ZIP with all of them and the computation Excel. About a minute in all."
+            : "For every map (each day or month): a print-ready PNG (400 dpi), plus one ZIP with all of them. About 12 seconds per map."}
         </p>
         {canOverlay && editable && (
           <div className="overlay-pick">
@@ -284,7 +284,7 @@ export default function VersionEditor({ version, role, geo }: { version: any; ro
         )}
         {stale && (
           <p className="msg warn">
-            The text was changed after these files were made: the images and PDFs still show the old text. Regenerate the exports.
+            The text was changed after these files were made: the images still show the old text. Regenerate the exports.
           </p>
         )}
         {editable && (

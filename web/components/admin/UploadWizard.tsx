@@ -26,6 +26,7 @@ interface Preview {
   uploadId: string;
   files: any[];
   sig: string | null;
+  reused?: { damage?: { filename: string; issue: string } } | null; // ENVI: historical damage taken from an earlier issue
 }
 
 function reportsOf(type: ProductType, payload: Payload | null): [string, any][] {
@@ -102,6 +103,43 @@ export default function UploadWizard({ type, geo }: { type: ProductType; geo: Ga
   const [error, setError] = useState<string | null>(null);
   const [layerId, setLayerId] = useState<string | undefined>();
   const [fromFeed, setFromFeed] = useState(false);
+  // drought forecast fetched from PAGASA DroughtCaster (ENVI "drought" file, drought product "file")
+  const [dcInfo, setDcInfo] = useState<string | null>(null);
+  const droughtField = type === "envi" ? "drought" : type === "drought" ? "file" : null;
+  const fetchDroughtcaster = async () => {
+    if (!droughtField) return;
+    setBusy(true);
+    setError(null);
+    try {
+      const r = await api<{ csv: string; filename: string; issued: string; period_start: string; period_end: string; months: string[] }>(
+        "/api/admin/droughtcaster",
+        { method: "POST" },
+      );
+      setFiles((fs) => ({ ...fs, [droughtField]: new File([r.csv], r.filename, { type: "text/csv" }) }));
+      setSettings((s) => ({
+        ...s,
+        issue_date: r.issued || s.issue_date,
+        period_start: r.period_start || s.period_start,
+        ...(type === "envi" ? { period_end: r.period_end || s.period_end } : {}),
+      }));
+      setPreview(null);
+      const mon = (m: string) => new Date(`${m}-01T00:00:00`).toLocaleString("en", { month: "long", year: "numeric" });
+      setDcInfo(`PAGASA DroughtCaster outlook issued ${r.issued}, ${mon(r.months[0])} – ${mon(r.months[r.months.length - 1])} (${r.filename}). The period and issue date were set from it.`);
+    } catch (e) {
+      setError(`DroughtCaster: ${(e as Error).message}`);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  // ENVI monthly update: the historical damage file the server reuses when none is uploaded
+  const [reuse, setReuse] = useState<{ filename: string; issue: string; status: string } | null | undefined>(undefined);
+  useEffect(() => {
+    if (type !== "envi") return;
+    api<{ damage: { filename: string; issue: string; status: string } | null }>("/api/admin/reuse")
+      .then((r) => setReuse(r.damage))
+      .catch(() => setReuse(null));
+  }, [type]);
 
   // a feed fetch from the admin home arrives through sessionStorage
   useEffect(() => {
@@ -311,9 +349,32 @@ export default function UploadWizard({ type, geo }: { type: ProductType; geo: Ga
                 }}
               />
               <a href={templateUrl(inp.template)}>Download template</a>
+              {inp.field === droughtField && (
+                <button type="button" className="btn secondary" disabled={busy} onClick={fetchDroughtcaster}>
+                  {busy ? "Fetching…" : "Fetch from PAGASA DroughtCaster"}
+                </button>
+              )}
             </div>
+            {inp.field === droughtField && files[inp.field] && dcInfo && files[inp.field].name.startsWith("droughtcaster_") && (
+              <p className="hint">✓ {dcInfo}</p>
+            )}
+            {type === "envi" && inp.field === "damage" && !files.damage && reuse !== undefined && (
+              <p className={`hint ${reuse ? "" : "warn"}`}>
+                {reuse ? (
+                  <>
+                    Optional for the monthly update: <strong>{reuse.filename}</strong> from the {reuse.issue} issue
+                    {reuse.status !== "published" ? ` (${reuse.status})` : ""} is reused. Upload a file only to replace it.
+                  </>
+                ) : (
+                  "Required: there is no earlier ENVI issue to reuse it from."
+                )}
+              </p>
+            )}
           </div>
         ))}
+        {type === "envi" && (
+          <p className="hint">Monthly update: upload the new drought forecast and the new standing crops; the season ENVI and the monthly maps are recomputed from them.</p>
+        )}
         <button className="btn" disabled={busy || !Object.keys(files).length} onClick={() => validate()}>
           {busy ? "Checking…" : "Validate"}
         </button>
@@ -327,6 +388,9 @@ export default function UploadWizard({ type, geo }: { type: ProductType; geo: Ga
           {reportsOf(type, payload).map(([ds, rep]) => (
             <div key={ds} style={{ marginBottom: 14 }}>
               {type === "envi" && <h3>{ds}</h3>}
+              {ds === "damage" && preview.reused?.damage && (
+                <p className="msg">Reused from the {preview.reused.damage.issue} issue: {preview.reused.damage.filename}</p>
+              )}
               {rep.n_data_rows !== undefined && (
                 <p className="small muted">
                   {rep.filename}: {rep.n_data_rows} rows, {rep.n_matched} matched, {rep.n_unmatched} unmatched, {rep.n_subtotal_rows} subtotal rows

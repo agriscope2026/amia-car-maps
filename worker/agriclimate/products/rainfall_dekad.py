@@ -113,8 +113,10 @@ def build(src, filename: str, settings: dict | None = None) -> dict:
                            {"total": data["total"]})
         lyr["date"] = d.isoformat()
         layers.append(lyr)
+    # the 10-day total is kept per area (in every day map) for the summary and advice, but has no map of its own
     total = common.layer("total", f"10-day total ({period_label})", "rainfall_mm", "mm", legend, data["total"])
-    layers.append(total)
+    if not layers:   # a file with only a 10-day total column (no daily values): the total is the only map
+        layers.append(total)
     payload.update({
         "title": TITLE,
         "subtitle": f"Forecast rainfall for {period_label} (as of {common.fmt_day(issued)})",
@@ -139,4 +141,4 @@ def build(src, filename: str, settings: dict | None = None) -> dict:
 
 
 def main_layer_id(payload: dict) -> str:
-    return "total"
+    return payload["layers"][0]["id"]

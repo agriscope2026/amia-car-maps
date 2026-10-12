@@ -51,8 +51,23 @@ def drought_timing(drought_data: pd.DataFrame, months: list[str], period_start: 
     return sorted(out, key=lambda g: -g["drought_months"])
 
 
+def month_forecast(drought_data: pd.DataFrame, month: str, labels: dict) -> list[tuple[str, list[str]]]:
+    """[(category, provinces)] of one forecast month, worst category first."""
+    col = f"cat_{month}"
+    if col not in drought_data.columns:
+        return []
+    groups: dict[str, list[str]] = {}
+    for key, v in drought_data[col].items():
+        cat = str(v).strip().lower() if pd.notna(v) else ""
+        if cat:
+            groups.setdefault(cat, []).append(labels.get(key, str(key).title()))
+    order = {c: i for i, c in enumerate(reversed(CATS))}
+    return sorted(((c, sorted(p)) for c, p in groups.items()), key=lambda g: order.get(g[0], 99))
+
+
 def generate(df: pd.DataFrame, meta: dict, results: dict, settings: dict) -> str:
-    """Draft recommendations from the ENVI table, the drought forecast and the summary."""
+    """Draft recommendations from the ENVI table, the drought forecast and the summary. With ``meta['month_name']``
+    (monthly ENVI) the forecast part is that month's and the priority areas are that month's High / Very High."""
     from .io_loader import PROVINCE_DISPLAY
 
     lines: list[str] = []
@@ -61,7 +76,14 @@ def generate(df: pd.DataFrame, meta: dict, results: dict, settings: dict) -> str
     if drought is not None and drought.ok:
         timing = drought_timing(drought.data, drought.report.get("months", []), settings.get("period_start", ""),
                                 PROVINCE_DISPLAY)
-    if timing:
+    month = meta.get("month_name")
+    if month and drought is not None and drought.ok:
+        groups = month_forecast(drought.data, month, PROVINCE_DISPLAY)
+        if groups:
+            lines.append(f"Drought forecast for {meta.get('month', month)}:")
+            lines += [f"• {_list(p)}: {c}." for c, p in groups]
+            lines.append("")
+    elif timing:
         lines.append("Expected dry conditions:")
         for g in timing:
             parts = []

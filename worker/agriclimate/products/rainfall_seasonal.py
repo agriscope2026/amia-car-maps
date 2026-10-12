@@ -96,8 +96,9 @@ def build(src, filename: str, settings: dict | None = None) -> dict:
         extra["pct_normal"] = data["pct_normal"]
     layers = [common.layer(f"m_{ym}", config.month_label(ym), "rainfall_mm", "mm", month_legend, data[f"m_{ym}"],
                            extra) for ym in months]
-    layers.append(common.layer("season_total", f"Season total ({season_label})", "rainfall_mm", "mm",
-                               season_legend, data["season_total"], extra))
+    # the season total is kept per area (in every month map) for the summary and advice, but has no map of its own
+    season = common.layer("season_total", f"Season total ({season_label})", "rainfall_mm", "mm", season_legend,
+                          data["season_total"], extra)
     if "pct_normal" in data and data["pct_normal"].notna().any():
         layers.append(common.layer("pct_normal", f"% of normal ({season_label})", "pct_normal", "%",
                                    classes.preset("pct_normal"), data["pct_normal"], extra))
@@ -111,7 +112,7 @@ def build(src, filename: str, settings: dict | None = None) -> dict:
         "level": "municipal",
         "source": settings.get("source") or DEFAULT_SOURCE,
         "layers": layers,
-        "summary": {"season_total": common.numeric_summary(layers[len(months)]),
+        "summary": {"season_total": common.numeric_summary(season),
                     "months": {ym: {k: v for k, v in common.numeric_summary(l).items() if k != "top"}
                                for ym, l in zip(months, layers)}},
         "method": {"classes": "lower-inclusive (100 mm → 100–200 mm)", "pct_normal_thresholds":

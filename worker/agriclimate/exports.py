@@ -1,9 +1,11 @@
-"""Export products for one product version: the map images and PDFs.
+"""Export products for one product version: the map images (and, for the rainfall and drought maps, PDFs).
 
-Every map (day, month, season total, % of normal, ENVI …) gets a print-ready PNG (400 dpi) and a vector PDF in the
-DA-RFO-CAR layout; all of them also come in one ZIP. ENVI additionally gets its presentation (5760×3240) and A4
-poster (450 dpi), each as PNG and PDF, in the prototype layout (sample data/envi_sample.png), with the map drawn in the same style as the
-other maps. A sharp JPG preview of each image is made for the dashboard's photo mode (not listed as a download).
+Rainfall and drought: every map (day, month, % of normal) gets a print-ready PNG (400 dpi) in the DA-RFO-CAR
+layout (PNG images only, no PDFs). ENVI: the season outlook and each month get a landscape
+presentation (5760×3240) and a portrait A4 poster (450 dpi) as PNG images only, in the prototype layout (sample
+data/envi_sample.png), with the map drawn in the same style as the other maps; its computation workbook
+(normalization, weights and index as live Excel formulas) goes in the ZIP. Everything also comes in one ZIP. A sharp
+JPG preview of each image is made for the dashboard's photo mode (not listed as a download).
 
 Optional: ``settings["crop_overlay"]`` draws standing crops as proportional circles on the maps;
 ``settings["hydro_overlay"]`` draws rivers and water bodies (OpenStreetMap).
@@ -24,6 +26,7 @@ from . import mapinfo, render
 MANILA = ZoneInfo("Asia/Manila")
 PREVIEW_WIDTH = 3000          # photo-mode previews: sharp enough to zoom in
 PREVIEW_QUALITY = 92
+NO_EXPORT_LAYERS = {"total", "season_total", "pct_normal"}   # older total layers; % of normal: dashboard only
 
 
 def now_manila() -> str:
@@ -55,50 +58,64 @@ def _map_only(payload: dict, layer: dict, path: Path) -> Path:
     style = render.STYLES.get(payload["type"], render.DEFAULT_STYLE)
     render._draw(ax, muni, prov, label_size=5.5, prov_label_size=12, pad=0.12, style=style,
                  label_style=render.DARK_LABELS)
-    if payload.get("hydro_overlay") and mapinfo.draw_hydro(ax, scale=1.4):
-        mapinfo.draw_hydro_legend_in_map(ax)
+    hydro = bool(payload.get("hydro_overlay")) and mapinfo.draw_hydro(ax, scale=1.4)
     if payload.get("crop_overlay"):
         mapinfo.draw_crop_circles(ax, payload["crop_overlay"])
-        mapinfo.draw_crop_legend_in_map(ax, payload["crop_overlay"])
+    # crops and rivers share one legend box, so the two keys never land on top of each other
+    mapinfo.draw_overlay_legend_in_map(ax, payload.get("crop_overlay"), hydro)
     fig.savefig(path, dpi=450, transparent=True)
     plt.close(fig)
     gc.collect()
     return path
 
 
-def _pdf(png: Path, path: Path, dpi: float) -> Path:
-    """High-resolution PDF of an image (full resolution kept)."""
-    from PIL import Image
-    with Image.open(png) as im:
-        im.convert("RGB").save(path, "PDF", resolution=dpi)
-    gc.collect()
-    return path
-
-
-def _envi_presentation(payload: dict, files: dict, settings: dict, map_only: Path, out_dir: Path) -> dict:
-    """ENVI presentation (5760×3240) + A4 poster (450 dpi) in the prototype layout, with the common map style,
-    each as PNG and PDF (full resolution)."""
+def _envi_images(meta: dict, payload: dict, layer: dict, recs: str, out_dir: Path, tag: str) -> dict:
+    """Presentation (5760×3240, landscape) + A4 poster (450 dpi, portrait) of one ENVI map – the season outlook or
+    one month – each as PNG and a web preview, with that map drawn in the common style."""
     from .envi import presentation
-    from .products.envi_product import compute
-    _, _, meta, _ = compute(files, settings)
-    recs = payload.get("texts", {}).get("recommendations", "")
+    base = "envi" if tag == "envi" else f"envi_{tag}"
+    mo = _map_only(payload, layer, out_dir / f"{base}_map_only.png")
     # one image at a time (each is ~75 MB in memory), so the worker fits a small (512 MB) instance
-    out = {"presentation": presentation.build_slide(meta, map_only, out_dir / "envi_presentation_5760x3240.png",
+    out = {"presentation": presentation.build_slide(meta, mo, out_dir / f"{base}_presentation_5760x3240.png",
                                                     scale=3.0, recommendations=recs)}
     gc.collect()
-    out["presentation_pdf"] = _pdf(out["presentation"], out_dir / "envi_presentation.pdf", 288)
-    out["presentation_web"] = _preview_jpg(out["presentation"], out_dir / "envi_presentation_web.jpg", 3840)
-    out["poster"] = presentation.build_poster(meta, map_only, out_dir / "envi_poster_A4.png", recommendations=recs,
+    out["presentation_web"] = _preview_jpg(out["presentation"], out_dir / f"{base}_presentation_web.jpg", 3840)
+    out["poster"] = presentation.build_poster(meta, mo, out_dir / f"{base}_poster_A4.png", recommendations=recs,
                                               scale=3.0)
     gc.collect()
-    out["poster_pdf"] = _pdf(out["poster"], out_dir / "envi_poster_A4.pdf", 450)
-    out["poster_web"] = _preview_jpg(out["poster"], out_dir / "envi_poster_A4_web.jpg", 2480)
+    out["poster_web"] = _preview_jpg(out["poster"], out_dir / f"{base}_poster_A4_web.jpg", 2480)
+    mo.unlink(missing_ok=True)
     return out
+
+
+def _envi_presentation(payload: dict, files: dict, settings: dict, out_dir: Path, progress) -> tuple[dict, Path]:
+    """Presentation + A4 poster for the season outlook and for each month's ENVI (that month's classes, top 10,
+    crops at risk and recommendations), plus the results workbook. Returns ({layer id: files}, workbook)."""
+    from .envi import index, pipeline, recommendations
+    from .products.envi_product import compute, month_keys
+    results, df, meta, s = compute(files, settings)
+    recs = payload.get("texts", {}).get("recommendations", "")
+    xlsx = pipeline.export_excel(df, meta, results, {**s, "recommendations": recs}, out_dir / "envi_results.xlsx")
+    layers = {lyr["id"]: lyr for lyr in payload["layers"]}
+    progress("presentation", "running", "Building the season outlook presentation and poster")
+    out = {"envi": _envi_images(meta, payload, layers["envi"], recs, out_dir, "envi")}
+    months = index.monthly_envi(df, meta, s, results["drought"].report)
+    yms = month_keys(list(months), s["period_start"], s["period_end"])
+    for name, f in months.items():
+        lid = f"m_{yms.get(name)}"
+        if lid not in layers:
+            continue
+        progress("presentation", "running", f"Building the {layers[lid]['label']} presentation and poster")
+        d, m = index.month_view(df, meta, name, f, layers[lid]["label"])
+        out[lid] = _envi_images(m, payload, layers[lid], recommendations.generate(d, m, results, s), out_dir,
+                                yms[name])
+    return out, xlsx
 
 
 def export_product(payload: dict, out_dir: Path, settings: dict | None = None, files: dict | None = None,
                    progress=None) -> dict:
-    """Render every map (PNG 300 dpi + PDF) and, for ENVI, the presentation and poster. Returns the manifest."""
+    """Render every map (PNG 400 dpi) or, for ENVI, the presentation and poster of the season and each month.
+    Returns the manifest."""
     progress = progress or (lambda *a: None)
     settings = settings or {}
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -111,33 +128,40 @@ def export_product(payload: dict, out_dir: Path, settings: dict | None = None, f
     manifest: dict = {"type": stem, "created": now_manila(), "files": {}, "maps": []}
 
     reports = {}
-    n = len(payload["layers"])
-    for i, lyr in enumerate(payload["layers"]):
+    xlsx = None
+    # the 10-day and season totals stay on the dashboard but get no map image / PDF
+    layers = [lyr for lyr in payload["layers"] if lyr["id"] not in NO_EXPORT_LAYERS]
+    n = len(layers)
+    envi_images = stem == "envi" and bool(files)   # ENVI: presentation + A4 poster instead of the square print map
+    for i, lyr in enumerate([] if envi_images else layers):
         progress("map", "running", f"Rendering map {i + 1}/{n}: {lyr['label']}")
         name = f"{stem}_map_{lyr['id']}"
         r = render.render_layer(payload, lyr, out_dir, name, preview=out_dir / f"{name}_preview.jpg")
         reports[lyr["id"]] = r["label_report"]
         manifest["maps"].append({"layer": lyr["id"], "label": lyr["label"], "alt": r["alt"], "png": r["png"].name,
-                                 "pdf": r["pdf"].name,
                                  "jpg": r["preview"].name})
     progress("map", "done", "Maps ready")
 
-    if stem == "envi" and files:
-        progress("presentation", "running", "Building the ENVI presentation and poster")
-        mo = _map_only(payload, payload["layers"][0], out_dir / "envi_map_only.png")
+    if envi_images:
         from .products.envi_product import _envi_settings
-        pres = _envi_presentation(payload, files, _envi_settings(settings), mo, out_dir)
-        mo.unlink(missing_ok=True)
-        manifest["maps"][0].update({k: p.name for k, p in pres.items()})
-        progress("presentation", "done", "Presentation and poster ready")
+        pres, xlsx = _envi_presentation(payload, files, _envi_settings(settings), out_dir, progress)
+        for lyr in layers:
+            if lyr["id"] in pres:
+                label = "Season outlook" if lyr["id"] == "envi" else lyr["label"]
+                manifest["maps"].append({"layer": lyr["id"], "label": lyr["label"],
+                                         "alt": f"El Niño Vulnerability Index – {label}: presentation and A4 poster",
+                                         **{k: p.name for k, p in pres[lyr["id"]].items()}})
+        progress("presentation", "done", f"{len(pres)} presentations and posters ready")
 
-    # one ZIP with every image and PDF (previews excluded)
+    # one ZIP with every image (previews excluded) and, for ENVI, the computation workbook
     zpath = out_dir / f"{stem}_{payload['period']['start']}_maps.zip"
     with zipfile.ZipFile(zpath, "w", zipfile.ZIP_STORED) as z:
         for m in manifest["maps"]:
-            for k in ("png", "pdf", "presentation", "presentation_pdf", "poster", "poster_pdf"):
+            for k in ("png", "pdf", "presentation", "poster"):
                 if m.get(k):
                     z.write(out_dir / m[k], f"CAR_{stem}_{layer_tag(m['layer'])}_{k}{Path(m[k]).suffix}")
+        if xlsx:
+            z.write(xlsx, f"CAR_{stem}_{payload['period']['start']}_computation.xlsx", zipfile.ZIP_DEFLATED)
     manifest["files"] = {"zip": zpath.name}
     manifest["labels_ok"] = all(r["ok"] for r in reports.values())
     # kept with the job for reference (not offered as downloads)

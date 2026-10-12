@@ -34,9 +34,16 @@ export function latestOf(list: CatalogEntry[], type: ProductType): CatalogEntry 
   return sortIssues(list.filter((p) => p.type === type))[0];
 }
 
-export function defaultLayer(type: ProductType, layers: { id: string }[]): string | undefined {
-  if (type === "rainfall_seasonal") return layers.find((l) => l.id === "season_total")?.id ?? layers[0]?.id;
+export function defaultLayer(_type: ProductType, layers: { id: string }[]): string | undefined {
   return layers[0]?.id;
+}
+
+/** 10-day / season total maps are no longer shown; older issues still carry them, so they are dropped on load
+ * (unless a total is the only map, e.g. a 10-day upload without daily values). */
+export const TOTAL_LAYERS = ["total", "season_total"];
+export function withoutTotals<P extends { layers: { id: string }[] }>(p: P): P {
+  const layers = p.layers.filter((l) => !TOTAL_LAYERS.includes(l.id));
+  return layers.length ? { ...p, layers } : p;
 }
 
 export function escapeHtml(s: unknown): string {

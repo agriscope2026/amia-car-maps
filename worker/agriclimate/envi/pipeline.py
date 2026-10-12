@@ -100,6 +100,9 @@ def export_excel(df: pd.DataFrame, meta: dict, results: dict, settings: dict, pa
             ws.conditional_format(1, ci, len(table), ci, {"type": "cell", "criteria": "==", "value": f'"{name}"',
                                                           "format": wb.add_format({"bg_color": color, "font_name": F})})
 
+        write_computation_sheet(xw.book, df, meta, settings, results, hdr)
+        write_monthly_sheet(xw, df, meta, settings, results, hdr)
+
         s = meta["summary"]
         summ = pd.DataFrame([{"Class": it["class"], "Range": it["range"], "Areas": it["count"]} for it in s["legend"]])
         summ.to_excel(xw, sheet_name="Summary", index=False)
@@ -140,6 +143,139 @@ def export_excel(df: pd.DataFrame, meta: dict, results: dict, settings: dict, pa
 
         write_recommendations_sheet(xw.book, settings.get("recommendations", ""), hdr)
     return path
+
+
+def write_computation_sheet(wb, df: pd.DataFrame, meta: dict, settings: dict, results: dict, hdr) -> None:
+    """'Computation' sheet: raw indicators → min–max normalization → weighted sum → class, as live Excel formulas
+    (with the computed values cached), so the normalization can be checked and weights tried out in Excel."""
+    from xlsxwriter.utility import xl_rowcol_to_cell as cell
+
+    F = config.FONT_FAMILY
+    ws = wb.add_worksheet("Computation")
+    bold = wb.add_format({"bold": True, "font_name": F})
+    note = wb.add_format({"italic": True, "font_color": "#555555", "font_name": F})
+    n3 = wb.add_format({"num_format": "0.000", "font_name": F})
+    n4 = wb.add_format({"num_format": "0.0000", "font_name": F})
+    inp = wb.add_format({"num_format": "0.0000", "bg_color": "#fff2cc", "border": 1, "font_name": F})
+    nk = config.NO_DATA_LABEL
+    rep = results["drought"].report
+    fixed = settings.get("hazard_scaling", "minmax") == "fixed" and rep.get("hazard_type") == "categorical"
+    invert = not fixed and rep.get("hazard_direction") == "lower_worse"
+    zero_missing = settings.get("missing_policy", "nodata") == "zero"
+
+    ws.write(0, 0, "ENVI computation – live Excel formulas", bold)
+    ws.write(1, 0, "Change a weight (yellow) or a raw value and the normalized values, ENVI and class recalculate. "
+                   "ENVI = w_D × Drought_norm + w_H × Damage_norm + w_C × Crops_norm.", note)
+
+    # parameter block: one row per indicator (weight, min, max, method)
+    first, n = 11, len(df)                         # data rows start at Excel row 12
+    last = first + n - 1
+    raw_col = {"hazard": 3, "damage": 4, "crops": 5}
+    labels = {"hazard": "Drought forecast score", "damage": "Historical damage (ha, mean/yr)",
+              "crops": "Standing crops (ha)"}
+    for i, h in enumerate(["Indicator", "Weight", "Min", "Max", "Normalization"]):
+        ws.write(3, i, h, hdr)
+    prow = {}
+    for j, k in enumerate(index.IND_KEYS):
+        r = 4 + j
+        prow[k] = r
+        rng = f"{cell(first, raw_col[k], True, False)}:{cell(last, raw_col[k], True, False)}"
+        vals = pd.to_numeric(df[f"{k}_raw"], errors="coerce")
+        lo, hi = vals.min(), vals.max()
+        ws.write(r, 0, labels[k])
+        ws.write_number(r, 1, float(meta["weights"][k]), inp)
+        ws.write_formula(r, 2, f"=MIN({rng})", n4, None if pd.isna(lo) else float(lo))
+        if k == "hazard" and fixed:
+            ws.write_number(r, 3, float(rep.get("hazard_max") or 0), n4)
+            method = "score ÷ maximum possible score (Max column), capped at 0–1"
+        else:
+            ws.write_formula(r, 3, f"=MAX({rng})", n4, None if pd.isna(hi) else float(hi))
+            method = ("min–max inverted: (max − x) / (max − min)" if k == "hazard" and invert
+                      else "min–max: (x − min) / (max − min); 0 when max = min")
+        ws.write(r, 4, method)
+    ws.write(7, 0, "Sum of weights", bold)
+    ws.write_formula(7, 1, "=SUM(B5:B7)", n4, float(sum(meta["weights"].values())))
+
+    br = [float(b) for b in meta["breaks"]]
+    ws.write(8, 0, "Class breaks", bold)
+    for i, b in enumerate(br):
+        ws.write_number(8, 1 + i, b, n4)
+    ws.write(8, 1 + len(br), "equal intervals: lower bound included" if meta["classification"] == "equal"
+             else "upper bound included", note)
+
+    heads = ["Rank", "Area", "Province", labels["hazard"], labels["damage"], labels["crops"],
+             "Drought (norm)", "Damage (norm)", "Crops (norm)", "ENVI", "Class"]
+    hr = first - 1
+    for i, h in enumerate(heads):
+        ws.write(hr, i, h, hdr)
+    ws.set_row(hr, 34)
+
+    blank = "0" if zero_missing else '""'
+    cmp = "<" if meta["classification"] == "equal" else "<="
+    names = config.CLASS_NAMES
+    for i, (_, row) in enumerate(df.iterrows()):
+        r = first + i
+        ws.write(r, 1, row["area"])
+        ws.write(r, 2, row["province_label"])
+        for k, c in raw_col.items():
+            v = row[f"{k}_raw"]
+            if pd.notna(v):
+                ws.write_number(r, c, float(v))
+        for k, c in raw_col.items():
+            x = cell(r, c)
+            mn, mx = cell(prow[k], 2, True, True), cell(prow[k], 3, True, True)
+            if k == "hazard" and fixed:
+                f = f"IF({mx}=0,0,MIN(1,MAX(0,{x}/{mx})))"
+            elif k == "hazard" and invert:
+                f = f"IF({mx}={mn},0,({mx}-{x})/({mx}-{mn}))"
+            else:
+                f = f"IF({mx}={mn},0,({x}-{mn})/({mx}-{mn}))"
+            v = row[f"{k}_norm"]
+            ws.write_formula(r, c + 3, f'=IF({x}="",{blank},{f})', n3, "" if pd.isna(v) else float(v))
+        g, h, k3, e = cell(r, 6), cell(r, 7), cell(r, 8), cell(r, 9)
+        envi = row["envi"]
+        ws.write_formula(r, 9, f'=IF(OR({g}="",{h}="",{k3}=""),"",$B$5*{g}+$B$6*{h}+$B$7*{k3})', n3,
+                         "" if pd.isna(envi) else float(envi))
+        cls = f'"{names[-1]}"'
+        for ci in range(len(names) - 2, -1, -1):          # nested IFs against the inner breaks C9…F9
+            cls = f'IF({e}{cmp}{cell(8, 2 + ci, True, True)},"{names[ci]}",{cls})'
+        ws.write_formula(r, 10, f'=IF({e}="","{nk}",{cls})', None, row["envi_class"])
+        ws.write_formula(r, 0, f'=IF({e}="","",RANK({e},$J${first + 1}:$J${last + 1}))', None,
+                         "" if pd.isna(row["rank"]) else int(row["rank"]))
+
+    ws.set_column(0, 0, 24)
+    ws.set_column(1, 2, 20)
+    ws.set_column(3, 9, 14)
+    ws.set_column(10, 10, 12)
+    ws.freeze_panes(first, 3)
+    ws.autofilter(hr, 0, last, len(heads) - 1)
+    for name, color in {**config.CLASS_COLORS, nk: config.NO_DATA_COLOR}.items():
+        ws.conditional_format(first, 10, last, 10, {"type": "cell", "criteria": "==", "value": f'"{name}"',
+                                                     "format": wb.add_format({"bg_color": color, "font_name": F})})
+
+
+def write_monthly_sheet(xw, df: pd.DataFrame, meta: dict, settings: dict, results: dict, hdr) -> None:
+    """'Monthly ENVI' sheet: per outlook month the drought score, its scaled value (score ÷ 3), the ENVI and class."""
+    months = index.monthly_envi(df, meta, settings, results["drought"].report)
+    if not months:
+        return
+    table = df[["area", "province_label"]].rename(columns={"area": "Area", "province_label": "Province"})
+    for m, f in months.items():
+        table[f"{m} drought score"] = f["hazard_raw"]
+        table[f"{m} drought (÷3)"] = f["hazard_norm"].round(3)
+        table[f"{m} ENVI"] = f["envi"].round(3)
+        table[f"{m} class"] = f["envi_class"]
+    table.to_excel(xw, sheet_name="Monthly ENVI", index=False, startrow=2)
+    ws = xw.sheets["Monthly ENVI"]
+    F = config.FONT_FAMILY
+    ws.write(0, 0, "Monthly ENVI = w_D × (month drought score ÷ 3) + w_H × Damage_norm + w_C × Crops_norm "
+                   "(damage and crops as in the season ENVI)", xw.book.add_format({"bold": True, "font_name": F}))
+    for i, c in enumerate(table.columns):
+        ws.write(2, i, c, hdr)
+    ws.set_row(2, 34)
+    ws.set_column(0, 1, 20)
+    ws.set_column(2, len(table.columns) - 1, 11)
+    ws.freeze_panes(3, 2)
 
 
 def write_recommendations_sheet(wb, text: str, hdr=None) -> None:
