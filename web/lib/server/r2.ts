@@ -53,6 +53,35 @@ export async function r2SignedUrl(bucket: string, key: string, seconds = 300, do
   return signed.url;
 }
 
+/**
+ * Published files are linked straight to the public bucket only on a custom domain. Cloudflare's shared `*.r2.dev`
+ * address is blocked by some ISPs, office firewalls and DNS filters (it is often abused for phishing) and is
+ * rate-limited, so without a custom domain the files are served through the app (/api/exports/…) instead.
+ */
+export function r2DirectPublic(): boolean {
+  if (!PUBLIC_URL) return false;
+  try {
+    return !new URL(PUBLIC_URL).hostname.toLowerCase().endsWith(".r2.dev");
+  } catch {
+    return false;
+  }
+}
+
+/** Saved download links that point to an `r2.dev` address → the app's own file route (no re-publish needed). */
+export function servedThroughApp<T extends { url?: string }>(versionId: string, downloads: T[] | undefined): T[] | undefined {
+  if (!downloads || r2DirectPublic()) return downloads;
+  return downloads.map((d) => {
+    try {
+      const u = d.url ? new URL(d.url) : null;
+      if (!u || !u.hostname.toLowerCase().endsWith(".r2.dev")) return d;
+      const name = decodeURIComponent(u.pathname.split("/").pop() ?? "");
+      return { ...d, url: `/api/exports/${versionId}/${encodeURIComponent(name)}` };
+    } catch {
+      return d;
+    }
+  });
+}
+
 export function r2PublicUrl(key: string) {
   if (!PUBLIC_URL) throw new Error("Set R2_PUBLIC_URL (the public bucket's r2.dev or custom-domain URL).");
   return `${PUBLIC_URL}/${key.split("/").map(encodeURIComponent).join("/")}`;

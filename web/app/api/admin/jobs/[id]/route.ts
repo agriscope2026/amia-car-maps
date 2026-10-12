@@ -32,7 +32,7 @@ export async function GET(req: Request, ctx: { params: Promise<{ id: string }> }
         const downloads =
           supabaseConfigured() && v.status === "published"
             ? await publishSupabaseExports(versionId, job.manifest)
-            : downloadsFromManifest(job.manifest, localExportUrl(versionId));
+            : downloadsFromManifest(job.manifest, localExportUrl(versionId, job.manifest?.created));
         await updateDraft(versionId, { exports: { job_id: jobId, manifest: job.manifest, downloads } }, v.status === "published");
         // files of the previous export that the new one no longer has (renamed / removed kinds) – R2 only
         await pruneVersionFiles(versionId, job.manifest, v.status === "published").catch((e) => console.error("prune failed:", e));

@@ -1,5 +1,5 @@
 import "server-only";
-import { R2_BUCKET, R2_PUBLIC_BUCKET, r2Configured, r2Delete, r2DeletePrefix, r2List, type R2Object } from "./r2";
+import { R2_BUCKET, R2_PUBLIC_BUCKET, r2Configured, r2Delete, r2DeletePrefix, r2DirectPublic, r2List, type R2Object } from "./r2";
 import { listVersions, type VersionRecord } from "./repo";
 import { manifestFiles } from "./exports";
 
@@ -7,7 +7,8 @@ import { manifestFiles } from "./exports";
  * Cloudflare R2 housekeeping. Files that nothing uses any more:
  *  - private `uploads/…`   raw inputs no version refers to (previews never saved, deleted versions);
  *  - private `exports/<version>/…` files of deleted versions, and files a regenerated export no longer lists;
- *  - public  `<version>/…` files of versions that are not published, or no longer listed in their export.
+ *  - public  `<version>/…` files of versions that are not published, or no longer listed in their export; all of
+ *    them while the public bucket has no custom domain (files are then served through the app, see r2DirectPublic).
  * Recent files are never touched (a validation or export may be running), nor keys outside these patterns.
  */
 const RECENT_HOURS = 24;
@@ -70,6 +71,7 @@ export async function planCleanup(now = Date.now()): Promise<CleanupPlan> {
       return live === "all" || live.has(rest.join("/")) || o.key.endsWith(".json");
     }, now),
     group(R2_PUBLIC_BUCKET, "Published files (public bucket)", pub, (o) => {
+      if (!r2DirectPublic()) return false; // not used: published files are served from the private bucket
       const [id, ...rest] = o.key.split("/");
       const v = byId.get(id);
       if (!v) return false;
@@ -102,7 +104,7 @@ export async function pruneVersionFiles(versionId: string, manifest: any, publis
   }
   for (const o of await r2List(R2_PUBLIC_BUCKET, `${versionId}/`)) {
     const name = o.key.slice(`${versionId}/`.length);
-    if (!published || !live.has(name)) (await r2Delete(R2_PUBLIC_BUCKET, o.key), n++);
+    if (!published || !r2DirectPublic() || !live.has(name)) (await r2Delete(R2_PUBLIC_BUCKET, o.key), n++);
   }
   return n;
 }

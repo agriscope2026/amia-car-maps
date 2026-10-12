@@ -7,6 +7,7 @@ import { postgresRepo } from "./postgres";
 import { supabaseRepo } from "./supabase";
 import type { Actor, DraftPatch, Repo } from "./types";
 import { withColors } from "@/lib/crops";
+import { servedThroughApp } from "../r2";
 
 export type { Actor, AuditEntry, VersionRecord } from "./types";
 export { slugFor } from "./types";
@@ -20,12 +21,19 @@ function repo(): Repo {
 const actorOf = (a: Actor | string): Actor => (typeof a === "string" ? { email: a } : a);
 
 export const listPublished = () => repo().listPublished();
-export const getPublishedPayload = (id: string) => repo().getPublishedPayload(id);
+/** Download links saved with an r2.dev address are served through the app instead (see r2DirectPublic). */
+export const getPublishedPayload = async (id: string) => {
+  const p = await repo().getPublishedPayload(id);
+  return p ? { ...p, downloads: servedThroughApp(id, p.downloads) } : p;
+};
 export const getCrops = async () => withColors(await repo().getCrops());
 export const setCropColors = (colors: Record<string, string>) => repo().setCropColors(colors);
 export const getIrrigation = () => repo().getIrrigation();
 export const listVersions = () => repo().listVersions();
-export const getVersion = (id: string) => repo().getVersion(id);
+export const getVersion = async (id: string) => {
+  const v = await repo().getVersion(id);
+  return v?.exports?.downloads ? { ...v, exports: { ...v.exports, downloads: servedThroughApp(id, v.exports.downloads) } } : v;
+};
 export const createDraft = (payload: Payload, settings: Record<string, any>, actor: Actor | string) =>
   repo().createDraft(payload, settings, actorOf(actor));
 export const updateDraft = (id: string, patch: DraftPatch, allowPublished = false) =>

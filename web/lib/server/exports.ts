@@ -3,7 +3,7 @@ import { promises as fs } from "fs";
 import path from "path";
 import type { Download } from "@/lib/types";
 import { LOCAL_EXPORTS_DIR } from "./repo";
-import { R2_BUCKET, R2_PUBLIC_BUCKET, r2Configured, r2Copy, r2PublicUrl } from "./r2";
+import { R2_BUCKET, R2_PUBLIC_BUCKET, r2Configured, r2Copy, r2DirectPublic, r2PublicUrl } from "./r2";
 import { supabaseAdmin, supabaseConfigured } from "./supabase";
 import { workerRaw } from "./worker";
 
@@ -51,13 +51,18 @@ export async function pullJobFiles(jobId: string, versionId: string, manifest: a
   }
 }
 
-export const localExportUrl = (versionId: string) => (file: string) => `/api/exports/${versionId}/${encodeURIComponent(file)}`;
+/** The app's own file route; `stamp` (the export's creation time) changes the URL when exports are regenerated,
+ * so cached copies are not served after a regeneration. */
+export const localExportUrl = (versionId: string, stamp?: string) => (file: string) =>
+  `/api/exports/${versionId}/${encodeURIComponent(file)}${stamp ? `?v=${encodeURIComponent(stamp)}` : ""}`;
 
 /** Supabase mode: on publish, copy the exports from the private bucket to the public one. */
 export async function publishSupabaseExports(versionId: string, manifest: any): Promise<Download[]> {
   const names = manifestFiles(manifest);
   if (r2Configured()) {
-    // Cloudflare R2: server-side copy from the private bucket to the public one
+    // no custom domain for the public bucket: serve through the app (r2.dev is blocked on some networks)
+    if (!r2DirectPublic()) return downloadsFromManifest(manifest, localExportUrl(versionId, manifest?.created));
+    // Cloudflare R2 on a custom domain: server-side copy from the private bucket to the public one
     for (const n of names) await r2Copy(R2_BUCKET, `exports/${versionId}/${n}`, R2_PUBLIC_BUCKET, `${versionId}/${n}`);
     return downloadsFromManifest(manifest, (f) => r2PublicUrl(`${versionId}/${f}`));
   }

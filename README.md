@@ -130,7 +130,7 @@ cd web && E2E_EMAIL=admin@example.com E2E_PASSWORD=admin-local-123 node scripts/
 | `SESSION_SECRET` | yes | 32+ characters; signs preview payloads (and local sessions) |
 | `CRON_SECRET` | production | Protects `/api/cron/rainfall-feed` (Vercel Cron sends it) |
 | `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY` | optional | Cloudflare R2 file storage instead of Supabase Storage (uploads, exports) |
-| `R2_BUCKET`, `R2_PUBLIC_BUCKET`, `R2_PUBLIC_URL` | with R2 | Private bucket (default `amia-car-maps`), public bucket (default `amia-car-maps-public`, public access on) and its public URL |
+| `R2_BUCKET`, `R2_PUBLIC_BUCKET`, `R2_PUBLIC_URL` | with R2 | Private bucket (default `amia-car-maps`), public bucket (default `amia-car-maps-public`, public access on) and its public URL. Published files are linked to the public bucket only when `R2_PUBLIC_URL` is a **custom domain**; with an `*.r2.dev` address (blocked on some networks) or none, they are served through the app (`/api/exports/…`: previews streamed and cached, big files via 5-minute signed links) |
 | `DATABASE_URL` | local / self-hosted | PostgreSQL + PostGIS instead of Supabase (e.g. the local dev database) |
 | `DEV_ADMIN_EMAIL`, `DEV_ADMIN_PASSWORD` | no-database mode only | Single admin login without any database |
 
