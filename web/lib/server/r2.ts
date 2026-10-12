@@ -58,19 +58,42 @@ export function r2PublicUrl(key: string) {
   return `${PUBLIC_URL}/${key.split("/").map(encodeURIComponent).join("/")}`;
 }
 
-/** Delete every object under a prefix. */
-export async function r2DeletePrefix(bucket: string, prefix: string) {
+export interface R2Object {
+  key: string;
+  size: number;
+  modified: string; // ISO date
+}
+
+/** Every object under a prefix (the whole bucket with prefix ""), following continuation pages. */
+export async function r2List(bucket: string, prefix = ""): Promise<R2Object[]> {
+  const out: R2Object[] = [];
   let token = "";
   do {
     const u = new URL(`${endpoint()}/${bucket}`);
     u.searchParams.set("list-type", "2");
-    u.searchParams.set("prefix", prefix);
+    if (prefix) u.searchParams.set("prefix", prefix);
     if (token) u.searchParams.set("continuation-token", token);
-    const xml = await (await check(await aws().fetch(u.toString()), `listing of ${prefix}`)).text();
-    const keys = [...xml.matchAll(/<Key>([^<]+)<\/Key>/g)].map((m) => decodeXml(m[1]));
-    for (const k of keys) await check(await aws().fetch(objUrl(bucket, k), { method: "DELETE" }), `delete of ${k}`);
+    const xml = await (await check(await aws().fetch(u.toString()), `listing of ${bucket}/${prefix}`)).text();
+    for (const m of xml.matchAll(/<Contents>([\s\S]*?)<\/Contents>/g)) {
+      const c = m[1];
+      out.push({
+        key: decodeXml(c.match(/<Key>([^<]+)<\/Key>/)?.[1] ?? ""),
+        size: Number(c.match(/<Size>(\d+)<\/Size>/)?.[1] ?? 0),
+        modified: c.match(/<LastModified>([^<]+)<\/LastModified>/)?.[1] ?? "",
+      });
+    }
     token = /<IsTruncated>true<\/IsTruncated>/.test(xml) ? decodeXml(xml.match(/<NextContinuationToken>([^<]+)</)?.[1] ?? "") : "";
   } while (token);
+  return out.filter((o) => o.key);
+}
+
+export async function r2Delete(bucket: string, key: string) {
+  await check(await aws().fetch(objUrl(bucket, key), { method: "DELETE" }), `delete of ${key}`);
+}
+
+/** Delete every object under a prefix. */
+export async function r2DeletePrefix(bucket: string, prefix: string) {
+  for (const o of await r2List(bucket, prefix)) await r2Delete(bucket, o.key);
 }
 
 const decodeXml = (s: string) =>

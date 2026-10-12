@@ -2,6 +2,7 @@ import { errorResponse, HttpError, requireRole } from "@/lib/server/auth";
 import { getVersion, updateDraft } from "@/lib/server/repo";
 import { worker } from "@/lib/server/worker";
 import { downloadsFromManifest, localExportUrl, publishSupabaseExports, pullJobFiles, supabaseConfigured } from "@/lib/server/exports";
+import { pruneVersionFiles } from "@/lib/server/storage-cleanup";
 
 /** Poll an export job; when it is done, attach the export files to the draft. */
 export async function GET(req: Request, ctx: { params: Promise<{ id: string }> }) {
@@ -33,6 +34,8 @@ export async function GET(req: Request, ctx: { params: Promise<{ id: string }> }
             ? await publishSupabaseExports(versionId, job.manifest)
             : downloadsFromManifest(job.manifest, localExportUrl(versionId));
         await updateDraft(versionId, { exports: { job_id: jobId, manifest: job.manifest, downloads } }, v.status === "published");
+        // files of the previous export that the new one no longer has (renamed / removed kinds) – R2 only
+        await pruneVersionFiles(versionId, job.manifest, v.status === "published").catch((e) => console.error("prune failed:", e));
       }
     }
     return Response.json({ id: job.id, status: job.status, progress: job.progress, error: job.error, labels_ok: job.manifest?.labels_ok });

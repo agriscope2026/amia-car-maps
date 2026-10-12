@@ -182,8 +182,15 @@ Administrators can permanently delete an **archived** version (or a draft):
 - from the **Delete** button in the Versions list, or
 - from the version page (*Delete this version*).
 
-The version's maps and files are removed too, and the deletion is recorded in the audit log. A published version
-cannot be deleted; unpublish it first.
+The version's maps and files are removed too (on Cloudflare R2 also its uploaded input files, unless another
+version still uses them), and the deletion is recorded in the audit log. A published version cannot be deleted;
+unpublish it first.
+
+**Storage (administrators):** the **Storage** page lists the files in Cloudflare R2 that no version uses any more –
+inputs of previews that were never saved, files of versions deleted earlier, files left behind when exports were
+regenerated, and public copies of unpublished versions – with their size. Nothing is deleted until you click
+**Delete … unused files** and confirm. Files from the last 24 hours are never touched. Regenerating exports now
+removes the previous export's leftover files automatically.
 
 ## Unpublishing
 

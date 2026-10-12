@@ -19,6 +19,7 @@ export function AdminBar({ email, role }: { email: string; role: string }) {
         <Link href="/admin">Products</Link>
         {role === "admin" && <Link href="/admin/reference">Reference data</Link>}
         {role === "admin" && <Link href="/admin/audit">Audit log</Link>}
+        {role === "admin" && <Link href="/admin/storage">Storage</Link>}
         <Link href="/">Dashboard</Link>
         <a
           href="#"

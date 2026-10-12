@@ -32,7 +32,15 @@ export const updateDraft = (id: string, patch: DraftPatch, allowPublished = fals
   repo().updateDraft(id, patch, allowPublished);
 export const publish = (id: string, actor: Actor | string) => repo().publish(id, actorOf(actor));
 export const unpublish = (id: string) => repo().unpublish(id);
-export const deleteVersion = (id: string) => repo().deleteVersion(id);
+/** Delete a version and, on Cloudflare R2, its export files and the uploads no other version uses. */
+export async function deleteVersion(id: string) {
+  const v = await repo().getVersion(id);
+  await repo().deleteVersion(id);
+  if (v) {
+    const { removeVersionFiles } = await import("../storage-cleanup");
+    await removeVersionFiles(v).catch((e) => console.error(`storage cleanup of version ${id} failed:`, e));
+  }
+}
 export const saveCrops = (c: CropsLayer, actor: Actor | string) => repo().saveCrops(c, actorOf(actor));
 export const saveIrrigation = (fc: any, serviceAreas: any | null) => repo().saveIrrigation(fc, serviceAreas);
 export const audit = (actor: Actor | string, action: string, entity?: string, entity_id?: string, details?: any) =>
