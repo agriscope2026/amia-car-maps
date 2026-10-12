@@ -98,16 +98,19 @@ async function publishFlow(name, preview, settings, check) {
   const zip = new Uint8Array(await call(zipD.url));
   assert(zip[0] === 0x50 && zip[1] === 0x4b, "ZIP of all images");
   if (pub.type === "envi") {
-    // ENVI: a presentation (landscape) + A4 poster (portrait) PNG for the season outlook and each month; no PDFs
-    const n = pub.layers.filter((l) => l.id === "envi" || l.id.startsWith("m_")).length;
-    assert(real.filter((d) => d.kind === "presentation").length === n, "one presentation per season / month");
-    assert(real.filter((d) => d.kind === "poster").length === n, "one A4 poster per season / month");
+    // ENVI: a presentation (landscape) + A4 poster (portrait) PNG for the title page, the season outlook, each month,
+    // the summary and the recommendations; no PDFs
+    const n = pub.layers.filter((l) => l.id === "envi" || l.id.startsWith("m_")).length + 3;
+    assert(real.filter((d) => d.kind === "presentation").length === n, "one presentation per page / season / month");
+    assert(real.filter((d) => d.kind === "poster").length === n, "one A4 poster per page / season / month");
+    assert(["cover", "summary", "recommendations"].every((p) => real.some((d) => d.layer === p)), "ENVI title, summary and recommendations pages");
     assert(real.every((d) => ["presentation", "poster", "zip"].includes(d.kind)), "ENVI: presentation and poster PNGs and the ZIP only");
     const png = new Uint8Array(await call(real.find((d) => d.kind === "presentation").url));
     assert(png[1] === 0x50 && png[2] === 0x4e && png[3] === 0x47, "presentation is a PNG");
   } else {
-    // one PNG per map, no PDFs
-    assert(real.filter((d) => d.kind === "png").length === pub.layers.length, "one PNG per map");
+    // one PNG per map plus the title, summary and recommendations pages; no PDFs
+    assert(real.filter((d) => d.kind === "png").length === pub.layers.length + 3, "one PNG per map + 3 pages");
+    assert(["cover", "summary", "recommendations"].every((p) => real.some((d) => d.layer === p)), "title, summary and recommendations pages");
     assert(real.every((d) => ["png", "zip"].includes(d.kind)), "only map images and the ZIP");
   }
   cookie = saved;

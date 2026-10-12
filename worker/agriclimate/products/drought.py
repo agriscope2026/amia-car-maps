@@ -102,6 +102,11 @@ def build(src, filename: str, settings: dict | None = None) -> dict:
     })
     payload["valid_text"] = f"Valid for the {label} outlook"
     payload["texts"] = common.base_texts(payload, settings)
+    # observed drought situation (PAGASA DroughtCaster assessment), when the forecast was fetched from there
+    cur = settings.get("current_condition")
+    if isinstance(cur, dict) and cur.get("by_province"):
+        payload["current"] = {"month": cur.get("month"), "label": cur.get("label"), "by_province": cur["by_province"],
+                              "source": cur.get("source") or "PAGASA DroughtCaster (observed)"}
     payload["texts"]["legend_title"] = "Legend (PAGASA drought categories)"
     if not payload["texts"]["notes"]:
         payload["texts"]["notes"] = " ".join(f"{c}: {d}." for c, d in DEFINITIONS)

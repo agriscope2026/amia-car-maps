@@ -111,7 +111,10 @@ export default function UploadWizard({ type, geo }: { type: ProductType; geo: Ga
     setBusy(true);
     setError(null);
     try {
-      const r = await api<{ csv: string; filename: string; issued: string; period_start: string; period_end: string; months: string[] }>(
+      const r = await api<{
+        csv: string; filename: string; issued: string; period_start: string; period_end: string; months: string[];
+        assessment?: Record<string, string | null>; assessment_month?: string | null;
+      }>(
         "/api/admin/droughtcaster",
         { method: "POST" },
       );
@@ -121,6 +124,16 @@ export default function UploadWizard({ type, geo }: { type: ProductType; geo: Ga
         issue_date: r.issued || s.issue_date,
         period_start: r.period_start || s.period_start,
         ...(type === "envi" ? { period_end: r.period_end || s.period_end } : {}),
+        // observed situation (PAGASA assessment) for the "current condition" on the summary page
+        current_condition:
+          r.assessment && r.assessment_month
+            ? {
+                month: r.assessment_month,
+                label: new Date(`${r.assessment_month}-01T00:00:00`).toLocaleString("en", { month: "long", year: "numeric" }),
+                by_province: r.assessment,
+                source: "PAGASA DroughtCaster (observed)",
+              }
+            : undefined,
       }));
       setPreview(null);
       const mon = (m: string) => new Date(`${m}-01T00:00:00`).toLocaleString("en", { month: "long", year: "numeric" });

@@ -135,8 +135,9 @@ class PagasaDroughtCasterFetcher(Fetcher):
         issued = max((str(r.get("issuedAt", ""))[:10] for r in rows.values()), default="")
         assessment = {p: next((d["status"] for d in r["data"] if d.get("type") == "assessment"), None)
                       for p, r in rows.items()}
+        a_month = max((d["date"] for r in rows.values() for d in r["data"] if d.get("type") == "assessment"), default=None)
         self.meta = {"issued": issued, "period_start": months[0], "period_end": months[-1], "months": months,
-                     "assessment": assessment}
+                     "assessment": assessment, "assessment_month": a_month}
         return FetchResult(buf.getvalue().encode("utf-8"), f"droughtcaster_CAR_{issued or months[0]}.csv",
                            "https://droughtcaster.pagasa.dost.gov.ph/", now_manila())
 

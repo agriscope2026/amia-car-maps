@@ -12,6 +12,7 @@ pyogrio>=0.9
 shapely>=2.0
 matplotlib>=3.8
 pillow>=10.0
+segno>=1.6           # QR codes on the title pages
 pytest>=8.0
 # OCR of PAGASA's seasonal forecast tables (published as images)
 rapidocr>=3.0

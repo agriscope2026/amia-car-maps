@@ -122,9 +122,20 @@ ENVI.
 
 On the public dashboard, **Photo mode** opens the finished images full screen, with the recommendations beside
 them:
-- **ENVI** shows the season outlook first, then each month's ENVI, each with its own classes, top 10, crops at risk
-  and recommendations. Switch between **▭ Presentation** (landscape) and **▯ A4** (portrait poster) in the top bar.
-- **Other maps** show the print map for each day or month.
+- **ENVI** shows a **title page**, the season outlook, then each month's ENVI (each with its own classes, top 10,
+  crops at risk and recommendations), then a **summary page** (areas per class for the season and every month,
+  crops at risk, the top 10) and the **recommendations page**. Switch between **▭ Presentation** (landscape) and
+  **▯ A4** (portrait poster) in the top bar: every page comes in both formats.
+- **10-day rainfall, seasonal rainfall and drought** show a **title page**, then the print map for each day or month,
+  then a **summary page** and an **agricultural recommendations page**. The pages are made with the exports, so after
+  editing the recommendations click **Regenerate exports** to update them.
+- **Title page** (all products): the DA-RFO-CAR AMIA Program header, the product title with the "for Cordillera
+  Administrative Region" banner, the period and issue date, the map legend, QR codes to the ACAP website
+  (acap-car.github.io) and the interactive maps (amia-car-maps.vercel.app), and the source (DOST-PAGASA).
+- **Summary page:** the **current condition** (the first day or month of the forecast; for drought and ENVI also the
+  observed PAGASA situation when the forecast was fetched from DroughtCaster) and the **expected forecast** in plain
+  sentences, then the key figures.
+- **Agricultural recommendations page:** the rice, corn and high-value crop advice first, then the advisory.
 - **Zoom:** use the + / − / Fit / 100% buttons, the mouse wheel, a double-click, or two fingers on a phone. Drag to
   move around a zoomed image.
 - **Moving between images:** ‹ › or the arrow keys go to the next or previous image. Esc closes photo mode.

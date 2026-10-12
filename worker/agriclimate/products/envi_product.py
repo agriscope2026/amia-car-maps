@@ -87,6 +87,11 @@ def build(files: dict, settings: dict | None = None) -> dict:
     payload["texts"] = common.base_texts(payload, {**settings, "recommendations": recs})
     payload["texts"]["legend_title"] = "Vulnerability class (ENVI)"
     payload["recommendations_source"] = "edited" if settings.get("recommendations") else "auto"
+    # observed drought situation (PAGASA DroughtCaster assessment), when the forecast was fetched from there
+    cur = settings.get("current_condition")
+    if isinstance(cur, dict) and cur.get("by_province"):
+        payload["current"] = {"month": cur.get("month"), "label": cur.get("label"), "by_province": cur["by_province"],
+                              "source": cur.get("source") or "PAGASA DroughtCaster (observed)"}
     return payload
 
 

@@ -142,6 +142,17 @@ def export_product(payload: dict, out_dir: Path, settings: dict | None = None, f
                                  "jpg": r["preview"].name})
     progress("map", "done", "Maps ready")
 
+    if not envi_images and manifest["maps"]:
+        # rainfall / drought: a title page first, a summary page and a recommendations page last
+        from . import pages
+        progress("pages", "running", "Making the title, summary and recommendations pages")
+        cover = pages.title_page(payload, out_dir)
+        extra = [pages.summary_page(payload, out_dir), pages.recommendations_page(payload, out_dir)]
+        as_entry = lambda p: {"layer": p["layer"], "label": p["label"], "alt": p["alt"],  # noqa: E731
+                              "png": p["png"].name, "jpg": p["jpg"].name}
+        manifest["maps"] = [as_entry(cover), *manifest["maps"], *(as_entry(p) for p in extra)]
+        progress("pages", "done", "Title, summary and recommendations pages ready")
+
     if envi_images:
         from .products.envi_product import _envi_settings
         pres, xlsx = _envi_presentation(payload, files, _envi_settings(settings), out_dir, progress)
@@ -152,6 +163,12 @@ def export_product(payload: dict, out_dir: Path, settings: dict | None = None, f
                                          "alt": f"El Niño Vulnerability Index – {label}: presentation and A4 poster",
                                          **{k: p.name for k, p in pres[lyr["id"]].items()}})
         progress("presentation", "done", f"{len(pres)} presentations and posters ready")
+        # title page first, summary and recommendations last – landscape and portrait like the images
+        from . import pages
+        progress("pages", "running", "Making the title, summary and recommendations pages")
+        cover, extra = pages.envi_pages(payload, out_dir)
+        manifest["maps"] = [cover, *manifest["maps"], *extra]
+        progress("pages", "done", "Title, summary and recommendations pages ready")
 
     # one ZIP with every image (previews excluded) and, for ENVI, the computation workbook
     zpath = out_dir / f"{stem}_{payload['period']['start']}_maps.zip"

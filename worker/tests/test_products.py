@@ -273,20 +273,23 @@ def test_drought_template_roundtrip():
 def test_exports_are_map_images(tmp_path):
     p = rainfall_dekad.build(DEKAD.read_bytes(), DEKAD.name, DEKAD_SETTINGS)
     m = exports.export_product(p, tmp_path)
-    assert m["labels_ok"] and len(m["maps"]) == 10                       # 10 daily maps; the 10-day total is not exported
+    assert m["labels_ok"] and len(m["maps"]) == 13                       # title page, 10 daily maps, summary, recommendations
+    assert [x["layer"] for x in m["maps"]][::11] == ["cover", "summary"] and m["maps"][-1]["layer"] == "recommendations"
     assert "total" not in {mp["layer"] for mp in m["maps"]}
     reps = json.loads((tmp_path / "label_report.json").read_text(encoding="utf-8"))
     assert all(r["placed"] == 83 and r["overlaps"] == [] for r in reps.values())
     from PIL import Image
     import zipfile
-    mp = m["maps"][0]
+    mp = m["maps"][1]                                                     # the first daily map
     assert set(mp) == {"layer", "label", "alt", "png", "jpg"}                       # PNG only, no PDF
     assert round(Image.open(tmp_path / mp["png"]).info["dpi"][0]) == 400
     assert not list(tmp_path.glob("*.pdf"))
     assert max(Image.open(tmp_path / mp["jpg"]).size) == exports.PREVIEW_WIDTH       # sharp preview for photo mode
     assert list(m["files"]) == ["zip"]
     names = zipfile.ZipFile(tmp_path / m["files"]["zip"]).namelist()
-    assert len(names) == 10 and all(n.endswith(".png") for n in names)
+    assert len(names) == 13 and all(n.endswith(".png") for n in names)
+    for page in (m["maps"][0], m["maps"][-2], m["maps"][-1]):              # pages: square like the maps, with a preview
+        assert Image.open(tmp_path / page["png"]).size == (3600, 3600) and (tmp_path / page["jpg"]).exists()
     assert "CAR_rainfall_dekad_2026-10-01_png.png" in names
 
 
@@ -360,6 +363,11 @@ def test_envi_exports_with_crop_circles(tmp_path):
     c = build_crops(config.DEFAULT_FILES["crops"].read_bytes(), config.DEFAULT_FILES["crops"].name, {"as_of": "2026-09-15"})
     ov = {"as_of": c["as_of"], "crops": {"Rice": c["colors"]["Rice"]}, "values": c["values"]}
     m = exports.export_product(p, tmp_path, {**s, "crop_overlay": ov}, files)
+    assert [x["layer"] for x in m["maps"]][0] == "cover" and [x["layer"] for x in m["maps"]][-2:] == ["summary", "recommendations"]
+    pg = m["maps"][0]                                                              # title page: landscape + portrait
+    assert Image.open(tmp_path / pg["presentation"]).size == (5760, 3240)
+    assert Image.open(tmp_path / pg["poster"]).size == (3720, 5262)
+    m = {**m, "maps": m["maps"][1:-2]}                                             # the season outlook and months
     mp = m["maps"][0]
     assert m["labels_ok"] and mp["layer"] == "envi"
     assert Image.open(tmp_path / mp["presentation"]).size == (5760, 3240)          # high-definition presentation

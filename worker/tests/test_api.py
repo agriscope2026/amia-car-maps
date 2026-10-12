@@ -56,7 +56,7 @@ def test_drought_export_job_end_to_end(client):
             break
         time.sleep(0.5)
     assert j["status"] == "done", j.get("error")
-    assert len(j["manifest"]["maps"]) == 6 and j["manifest"]["labels_ok"]
+    assert len(j["manifest"]["maps"]) == 9 and j["manifest"]["labels_ok"]    # title page + 6 months + summary + recs
     z = client.get(f"/jobs/{job_id}/files/{j['manifest']['files']['zip']}")
     assert z.status_code == 200 and z.content[:2] == b"PK"
     assert client.get(f"/jobs/{job_id}/files/../../etc/passwd").status_code == 404

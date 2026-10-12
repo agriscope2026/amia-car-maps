@@ -7,8 +7,8 @@ Administrative Region (DA-RFO-CAR), AMIA Program. It has two parts:
   forecasts (mm) and the drought forecast for the 77 municipalities of CAR. It has crop and irrigation overlays,
   an archive, downloads and share links.
 - **Admin workspace:** upload → validate → preview → edit text → generate print-ready exports → publish.
-  - Exports are the map images (PNG, no PDFs): every rainfall and drought map gets a print-ready PNG (400 dpi), plus
-    one ZIP of all of them. ENVI gets, for the season outlook and each month, a landscape presentation (5760×3240) and a
+  - Exports are the map images (PNG, no PDFs): every rainfall and drought map gets a print-ready PNG (400 dpi), with a
+    title page first and a summary page and a recommendations page last, plus one ZIP of all of them. ENVI gets, for the season outlook and each month, a landscape presentation (5760×3240) and a
     portrait A4 poster (450 dpi) as PNG images, plus the computation Excel in the ZIP. Standing crops can be added as proportional circles
     (seasonal rainfall, drought and ENVI), with a circle legend.
   - Print maps follow the DA-RFO-CAR sample layouts in `sample data/`. The 10-day forecast has one map per
