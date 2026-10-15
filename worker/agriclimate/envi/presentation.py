@@ -408,13 +408,14 @@ def build_slide(meta: dict, map_png: Path, out: Path, scale: float = 1.0, recomm
     # left column
     lx, lw = 28, 600
     y = top + 6
-    ov_lines = cv.wrap(c["overview"], "regular", 17, lw - 44)
-    oh = 58 + len(ov_lines) * 17 * 1.38 + 16
-    cv.rrect(lx, y, lw, oh, GREEN, r=16)
-    cv.text(lx + 22, y + 16, "Overview & Objective", "bold", 21, PANEL_TEXT)
-    cv.para(lx + 22, y + 54, c["overview"], lw - 44, size=17, fill=PANEL_TEXT)
-    y += oh + 22
     recs = (recommendations or "").strip()
+    if not recs:   # with recommendations the (generic) overview gives way, so they can be read at a larger size
+        ov_lines = cv.wrap(c["overview"], "regular", 17, lw - 44)
+        oh = 58 + len(ov_lines) * 17 * 1.38 + 16
+        cv.rrect(lx, y, lw, oh, GREEN, r=16)
+        cv.text(lx + 22, y + 16, "Overview & Objective", "bold", 21, PANEL_TEXT)
+        cv.para(lx + 22, y + 54, c["overview"], lw - 44, size=17, fill=PANEL_TEXT)
+        y += oh + 22
     if not recs:   # the min–max formula is also in the footnote, so it gives way to recommendations
         cv.text(lx + 4, y, "Assessment Formula & Methodology", "bold", 21, INK)
         y = cv.para(lx + 4, y + 36, c["method"], lw - 8, size=16.5) + 10
@@ -425,8 +426,8 @@ def build_slide(meta: dict, map_png: Path, out: Path, scale: float = 1.0, recomm
     legend_h = 64 + 17 * 2.0 * len(meta["summary"]["legend"]) + 14
     legend_y = H - 66 - legend_h - 6
     if recs:
-        _rec_block(cv, lx, y + 10, lw, legend_y - 12, condense_recommendations(recs), max_size=14.5,
-                   min_size=11.5, title_size=20)
+        _rec_block(cv, lx, y + 10, lw, legend_y - 12, condense_recommendations(recs), max_size=22,
+                   min_size=10, title_size=22)
     else:
         _hotspots(cv, lx, y + 10, lw, legend_y - 14, meta)
     _legend(cv, lx, max(y + 12, legend_y), lw, meta, size=17)
@@ -501,7 +502,7 @@ def build_poster(meta: dict, map_png: Path, out: Path, recommendations: str = ""
     if recs:
         ry = max(yy, top10_end) + 14
         cv.rrect(24, ry, W - 48, fy - ry - 14, LIGHT, r=14, outline=(205, 220, 208), width=1.5)
-        _rec_block(cv, 40, ry + 14, W - 80, fy - 28, recs, max_size=15, min_size=11, title_size=21)
+        _rec_block(cv, 40, ry + 14, W - 80, fy - 28, recs, max_size=24, min_size=10, title_size=22)
     cv.d.line([(24 * s, fy * s), ((W - 24) * s, fy * s)], fill=(205, 212, 206), width=2)
     yy = fy + 12
     for line in foot:

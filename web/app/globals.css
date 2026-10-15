@@ -252,8 +252,8 @@ select { width: 100%; padding: 8px 10px; border: 1px solid var(--line); border-r
 
 /* ------------------------------------------------------ farm recommendations */
 .farm { list-style: none; padding: 0; margin: 6px 0 4px; display: grid; gap: 8px; }
-.farm li { display: grid; grid-template-columns: 58px 1fr; gap: 8px; align-items: start; font-size: 13px; }
-.farm .chip { color: #fff; font-weight: 700; font-size: 11px; text-align: center; border-radius: 6px; padding: 3px 0; letter-spacing: .03em; }
+.farm li { display: grid; grid-template-columns: 74px 1fr; gap: 8px; align-items: start; font-size: 13px; }
+.farm .chip { color: #fff; font-weight: 700; font-size: 10.5px; text-align: center; border-radius: 6px; padding: 3px 0; letter-spacing: .03em; }
 .farm-fields { border-top: 1px solid var(--line); padding-top: 10px; display: grid; gap: 10px; }
 .farm-fields h3 { margin: 0; }
 .linklike { background: none; border: 0; color: var(--green); font-weight: 600; cursor: pointer; padding: 0; text-decoration: underline; }

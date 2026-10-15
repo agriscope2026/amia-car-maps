@@ -65,12 +65,14 @@ export interface Texts {
   advice_rice?: string;
   advice_corn?: string;
   advice_hvc?: string;
+  advice_livestock?: string;
 }
 
-export const FARM_CROPS: { key: "advice_rice" | "advice_corn" | "advice_hvc"; crop: string; label: string; color: string }[] = [
+export const FARM_CROPS: { key: "advice_rice" | "advice_corn" | "advice_hvc" | "advice_livestock"; crop: string; label: string; color: string }[] = [
   { key: "advice_rice", crop: "rice", label: "Rice", color: "#2e7d32" },
   { key: "advice_corn", crop: "corn", label: "Corn", color: "#e0a100" },
   { key: "advice_hvc", crop: "hvc", label: "HVC (high-value crops)", color: "#7b3fa0" },
+  { key: "advice_livestock", crop: "livestock", label: "Livestock & poultry", color: "#8d5524" },
 ];
 
 export interface Download {

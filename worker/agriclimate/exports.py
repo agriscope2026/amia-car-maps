@@ -147,7 +147,7 @@ def export_product(payload: dict, out_dir: Path, settings: dict | None = None, f
         from . import pages
         progress("pages", "running", "Making the title, summary and recommendations pages")
         cover = pages.title_page(payload, out_dir)
-        extra = [pages.summary_page(payload, out_dir), pages.recommendations_page(payload, out_dir)]
+        extra = [*pages.summary_pages(payload, out_dir), *pages.recommendations_pages(payload, out_dir)]
         as_entry = lambda p: {"layer": p["layer"], "label": p["label"], "alt": p["alt"],  # noqa: E731
                               "png": p["png"].name, "jpg": p["jpg"].name}
         manifest["maps"] = [as_entry(cover), *manifest["maps"], *(as_entry(p) for p in extra)]

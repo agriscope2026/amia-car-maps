@@ -42,8 +42,9 @@ AMBER = (232, 163, 23)
 RISK = ("High", "Very High")
 
 
-def _canvas(size: tuple[int, int]) -> Canvas:
-    cv = Canvas(int(size[0] * SCALE), int(size[1] * SCALE), SCALE)
+def _canvas(size: tuple[int, int], measure: bool = False) -> Canvas:
+    """A page; ``measure=True`` gives a tiny canvas for laying out only (same text metrics, nothing kept)."""
+    cv = Canvas(8, 8, SCALE) if measure else Canvas(int(size[0] * SCALE), int(size[1] * SCALE), SCALE)
     cv.W, cv.H = size
     return cv
 
@@ -102,13 +103,13 @@ def _header(cv: Canvas, payload: dict, kicker: str) -> float:
             px, _, _, _ = cv.paste(p, x - 84, 34, 84, 76)
             x = px - 14
     t = payload.get("texts", {})
-    cv.text(W / 2, 52, kicker.upper(), "semibold", 17, MUTED, anchor="mm")
+    cv.text(W / 2, 48, kicker.upper(), "bold", _fit(cv, kicker.upper(), "bold", 26, W - 400, 18), AMBER, anchor="mm")
     title = t.get("title") or payload.get("title", "")
-    cv.text(W / 2, 88, title, "bold", _fit(cv, title, "bold", 34, W - 380, 20), GREEN_DARK, anchor="mm")
-    cv.text(W / 2, 122, f"{payload['period']['label']}  ·  as of {_date(payload.get('issued', ''))}", "italic", 18,
-            MUTED, anchor="mm")
-    cv.d.line([(40 * cv.s, 146 * cv.s), ((W - 40) * cv.s, 146 * cv.s)], fill=GREEN, width=int(4 * cv.s))
-    return 166
+    cv.text(W / 2, 92, title, "bold", _fit(cv, title, "bold", 40, W - 400, 22), GREEN_DARK, anchor="mm")
+    sub = f"{payload['period']['label']}  ·  as of {_date(payload.get('issued', ''))}"
+    cv.text(W / 2, 136, sub, "semibold", _fit(cv, sub, "semibold", 26, W - 400, 18), MUTED, anchor="mm")
+    cv.d.line([(40 * cv.s, 166 * cv.s), ((W - 40) * cv.s, 166 * cv.s)], fill=GREEN, width=int(5 * cv.s))
+    return 190
 
 
 def _source_line(payload: dict) -> str:
@@ -119,13 +120,14 @@ def _source_line(payload: dict) -> str:
 def _footer(cv: Canvas, payload: dict, page: str):
     W, H = cv.W, cv.H
     t = payload.get("texts", {})
-    y = H - 58
-    cv.d.line([(40 * cv.s, y * cv.s), ((W - 40) * cv.s, y * cv.s)], fill=(205, 212, 206), width=max(1, int(cv.s)))
+    y = H - 80
+    cv.d.line([(40 * cv.s, y * cv.s), ((W - 40) * cv.s, y * cv.s)], fill=(205, 212, 206), width=max(1, int(2 * cv.s)))
     src = f"Sources: {t.get('sources') or payload.get('source', '')}"
-    for i, l in enumerate(cv.wrap(src, "italic", 12.5, W - 260)[:2]):
-        cv.text(40, y + 10 + i * 17, l, "italic", 12.5, MUTED)
-    cv.text(W - 40, y + 10, page, "semibold", 13, GREEN_DARK, anchor="ra")
-    cv.text(W - 40, y + 28, "DA-RFO-CAR · AMIA Program", "regular", 12, MUTED, anchor="ra")
+    lab_w = max(cv.width(page, "bold", 22), cv.width("DA-RFO-CAR · AMIA", "regular", 18)) + 40
+    for i, l in enumerate(cv.wrap(src, "italic", 18, W - 80 - lab_w)[:2]):
+        cv.text(40, y + 12 + i * 24, l, "italic", 18, MUTED)
+    cv.text(W - 40, y + 12, page, "bold", 22, GREEN_DARK, anchor="ra")
+    cv.text(W - 40, y + 42, "DA-RFO-CAR · AMIA", "regular", 18, MUTED, anchor="ra")
 
 
 def _table(cv: Canvas, x, y, cols: list[tuple[str, float, str]], rows: list[list], size=15, row_h=None,
@@ -199,10 +201,10 @@ def _cover_band(cv: Canvas) -> float:
     l1 = "DEPARTMENT OF AGRICULTURE - RFO Cordillera Administrative Region"
     l2 = "Adaptation and Mitigation Initiative in Agriculture Program"
     l3 = "Building farming and fishing communities, livelihoods, and enterprises resilient to economic and climate shocks."
-    cv.text(tx, 32, l1, "regular", _fit(cv, l1, "regular", 19, tw), GREEN)
-    cv.text(tx, 58, l2, "bold", _fit(cv, l2, "bold", 24, tw), AMBER)
-    cv.text(tx, 92, l3, "italic", _fit(cv, l3, "italic", 14.5, tw), INK)
-    return 128
+    cv.text(tx, 26, l1, "semibold", _fit(cv, l1, "semibold", 24, tw), GREEN)
+    cv.text(tx, 58, l2, "bold", _fit(cv, l2, "bold", 30, tw), AMBER)
+    cv.text(tx, 96, l3, "italic", _fit(cv, l3, "italic", 20, tw), INK)
+    return 132
 
 
 def _legend_items(payload: dict) -> tuple[dict, list]:
@@ -210,11 +212,11 @@ def _legend_items(payload: dict) -> tuple[dict, list]:
     return lyr["legend"], lyr["legend"]["classes"]
 
 
-def _legend_height(payload: dict, max_h: float, row: float = 40) -> float:
-    return min(max_h, 86 + row * len(_legend_items(payload)[1]) + 10)
+def _legend_height(payload: dict, max_h: float, row: float = 52) -> float:
+    return min(max_h, 100 + row * len(_legend_items(payload)[1]) + 12)
 
 
-def _legend_panel(cv: Canvas, payload: dict, x: float, y: float, w: float, h: float, max_row: float = 40):
+def _legend_panel(cv: Canvas, payload: dict, x: float, y: float, w: float, h: float, max_row: float = 52):
     lg, items = _legend_items(payload)
     title = (payload.get("texts", {}).get("legend_title") or lg.get("title") or "").rstrip(":")
     title = re.sub(r"(?i)^legend\s*", "", title).strip()               # "LEGEND in millimeters (mm)" → "in millimeters (mm)"
@@ -223,30 +225,31 @@ def _legend_panel(cv: Canvas, payload: dict, x: float, y: float, w: float, h: fl
     if title.lower().startswith("in "):
         title = ("Rainfall " if lg.get("unit") == "mm" else "") + title
     cv.rrect(x, y, w, h, LIGHT, r=14)
-    cv.text(x + 22, y + 18, "LEGEND", "bold", 18, GREEN_DARK)
+    cv.text(x + 22, y + 16, "LEGEND", "bold", 26, GREEN_DARK)
     if title:
-        cv.text(x + 22, y + 44, title, "regular", _fit(cv, title, "regular", 15, w - 44), MUTED)
-    row = min(max_row, (h - 86) / max(len(items), 1))
-    fs = min(22, row * 0.45)
+        cv.text(x + 22, y + 52, title, "semibold", _fit(cv, title, "semibold", 22, w - 44), MUTED)
+    row = min(max_row, (h - 100) / max(len(items), 1))
+    fs = min(30, row * 0.56)
     for i, c in enumerate(items):
-        yy = y + 76 + i * row
-        cv.rect(x + 22, yy, 44, row * 0.7, _hex(c["color"]), outline=(90, 90, 90))
+        yy = y + 92 + i * row
+        cv.rect(x + 22, yy, 50, row * 0.72, _hex(c["color"]), outline=(90, 90, 90))
         unit = " mm" if lg.get("unit") == "mm" and lg.get("kind") == "graduated" else ""
         label = c["label"] + unit
         if payload["type"] == "envi" and c.get("lo") is not None and c.get("hi") is not None:
             label = f"{c['lo']:.2f}–{c['hi']:.2f}  {c['label']}"
         text = f"{label}  –  {c['desc']}" if c.get("desc") else label
-        cv.text(x + 80, yy + row * 0.35, text, "regular", _fit(cv, text, "regular", fs, w - 104), INK, anchor="lm")
+        cv.text(x + 86, yy + row * 0.36, text, "regular", _fit(cv, text, "regular", fs, w - 110), INK, anchor="lm")
 
 
 def _qr_block(cv: Canvas, x: float, y: float, w: float, size: float, caption: str, url: str):
-    cv.text(x + w / 2, y, caption, "italic", 17, INK, anchor="ma")
+    cv.text(x + w / 2, y, caption, "italic", _fit(cv, caption, "italic", 24, w - 10), INK, anchor="ma")
     shown = url.replace("https://", "").replace("http://", "").rstrip("/")
-    cv.text(x + w / 2, y + 26, shown, "semibold", _fit(cv, shown, "semibold", 24, w - 10), AMBER, anchor="ma")
-    tw = cv.width(shown, "semibold", _fit(cv, shown, "semibold", 24, w - 10))
-    cv.d.line([((x + w / 2 - tw / 2) * cv.s, (y + 58) * cv.s), ((x + w / 2 + tw / 2) * cv.s, (y + 58) * cv.s)],
-              fill=AMBER, width=int(2 * cv.s))
-    cv.paste(_qr(url), x + (w - size) / 2, y + 70, size, size)
+    fs = _fit(cv, shown, "bold", 30, w - 10)
+    cv.text(x + w / 2, y + 32, shown, "bold", fs, AMBER, anchor="ma")
+    tw = cv.width(shown, "bold", fs)
+    cv.d.line([((x + w / 2 - tw / 2) * cv.s, (y + 34 + fs * 1.15) * cv.s), ((x + w / 2 + tw / 2) * cv.s,
+               (y + 34 + fs * 1.15) * cv.s)], fill=AMBER, width=int(3 * cv.s))
+    cv.paste(_qr(url), x + (w - size) / 2, y + 84, size, size)
 
 
 def title_page(payload: dict, out_dir: Path, size=SQUARE, suffix: str = "") -> dict:
@@ -277,11 +280,11 @@ def title_page(payload: dict, out_dir: Path, size=SQUARE, suffix: str = "") -> d
     issued = f"Issued (as of) {_date(payload.get('issued', ''))}"
     if payload.get("valid_text"):
         issued = f"{payload['valid_text']}  ·  {issued}"
-    cv.text(W / 2, y, issued, "semibold", 20, GREEN_DARK, anchor="ma")
-    y += 48
+    cv.text(W / 2, y, issued, "semibold", _fit(cv, issued, "semibold", 28, W - 80, 18), GREEN_DARK, anchor="ma")
+    y += 56
 
     # legend + QR codes, centred in the space left above the source line
-    bottom = H - 120
+    bottom = H - 140
     avail = bottom - y
     links = (("Visit the ACAP website:", ACAP_URL), ("View the interactive maps:", PORTAL_URL))
     if H > W * 1.2:      # portrait (A4): a full-width legend, the two QR codes side by side below it
@@ -305,7 +308,7 @@ def title_page(payload: dict, out_dir: Path, size=SQUARE, suffix: str = "") -> d
         for i, (cap, url) in enumerate(links):
             _qr_block(cv, qx + i * (half + 20), top + (max(lh, qh) - qh) / 2, half, qs, cap, url)
     src = _source_line(payload)
-    cv.text(W / 2, H - 92, src, "bold", _fit(cv, src, "bold", 20, W - 80), GREEN_DARK, anchor="mm")
+    cv.text(W / 2, H - 112, src, "bold", _fit(cv, src, "bold", 30, W - 80), GREEN_DARK, anchor="mm")
     _footer(cv, payload, "Title page")
     png, jpg = _save(cv, *_files(payload, out_dir, "cover", suffix))
     kind = PRODUCT_NAMES.get(payload["type"], payload["type"])
@@ -440,145 +443,282 @@ def _envi_text(payload: dict) -> tuple[list[str], list[str]]:
     return cur, exp
 
 
-def _text_panel(cv: Canvas, x, y, w, title: str, lines: list[str], size=16) -> float:
-    """Light panel with a title and bullet sentences; returns its bottom."""
-    body_h = sum(len(cv.wrap(l, "regular", size, w - 62)) * size * 1.38 + 6 for l in lines) or size * 1.4
-    h = 56 + body_h + 14
-    cv.rrect(x, y, w, h, LIGHT, r=14)
-    cv.rect(x, y, 8, h, GREEN)
-    cv.text(x + 26, y + 16, title, "bold", 21, GREEN_DARK)
-    yy = y + 52
-    for l in lines or ["No data."]:
-        yy = cv.rich_bullet(x + 26, yy, "", l, w - 50, size=size) + 6
-    return y + h
+# ------------------------------------------------- phone-first page flow ---
+# The pages are viewed as images: on a phone a 1200-unit page is shown ~400 px wide (1 unit ≈ 0.33 px), so text
+# below ~28 units cannot be read without zooming. Text starts large and shrinks with the amount of content, but
+# never below MIN_FS: what does not fit then continues on another page ("Summary (2/2)").
+
+MAX_FS, MIN_FS = 40, 28
+FS_STEPS = (40, 38, 36, 34, 32, 30, 28)
+TABLE_FS = 27
+FOOT_H = 96          # room kept for the footer
+
+
+class Flow:
+    """Lays blocks out top to bottom and starts a new page when the next one does not fit."""
+
+    def __init__(self, payload: dict, size, kicker: str, fs: float, measure: bool = False):
+        self.payload, self.size, self.kicker, self.fs, self.measure = payload, size, kicker, fs, measure
+        self.pages: list[Canvas] = []
+        self.new_page()
+
+    def new_page(self):
+        self.cv = _canvas(self.size, self.measure)
+        self.y = self.top = _header(self.cv, self.payload, self.kicker)
+        self.pages.append(self.cv)
+
+    @property
+    def W(self):
+        return self.cv.W
+
+    def room(self) -> float:
+        return self.cv.H - FOOT_H - self.y
+
+    def ensure(self, h: float):
+        if h > self.room() and self.y > self.top + 1:
+            self.new_page()
+
+    def gap(self, h: float):
+        self.y += h
+
+    def table_keep(self, n_rows: int, extra: float = 0, size: float = TABLE_FS) -> float:
+        """Room a heading reserves so that it moves to the next page together with its table (if that fits a page)."""
+        full = (n_rows + 1) * size * 1.75 + 18 + extra
+        return full if full <= self.cv.H - FOOT_H - self.top - 120 else size * 1.75 * 4
+
+    # --- blocks ---
+    def heading(self, text: str, keep: float = 0):
+        hs = self.fs + 8
+        self.ensure(hs * 1.5 + keep)
+        self.cv.rect(40, self.y + 4, 10, hs * 1.05, GREEN)
+        self.cv.text(64, self.y, text, "bold", hs, GREEN_DARK)
+        self.y += hs * 1.55
+
+    def bullets(self, lines: list[str]):
+        fs = self.fs
+        for l in lines or ["No data."]:
+            wrapped = self.cv.wrap(l, "regular", fs, self.W - 130)
+            lh = fs * 1.36
+            if len(wrapped) * lh > self.room() and self.y > self.top + 1:
+                # split a long sentence over two pages rather than leaving a big gap
+                fit = max(1, int(self.room() // lh))
+                if fit < len(wrapped) and fit >= 2:
+                    self._bullet(wrapped[:fit], fs, first=True)
+                    self.new_page()
+                    self._bullet(wrapped[fit:], fs, first=False)
+                    continue
+                self.new_page()
+            self._bullet(wrapped, fs, first=True)
+
+    def _bullet(self, wrapped: list[str], fs: float, first: bool):
+        cv = self.cv
+        if first:
+            r = fs * 0.2
+            cv.d.ellipse([(58 - r) * cv.s, (self.y + fs * 0.62 - r) * cv.s, (58 + r) * cv.s,
+                          (self.y + fs * 0.62 + r) * cv.s], fill=GREEN)
+        for w in wrapped:
+            cv.text(80, self.y, w, "regular", fs, INK)
+            self.y += fs * 1.36
+        self.y += fs * 0.35
+
+    def paragraph(self, text: str, style="regular", color=INK, size=None):
+        fs = size or self.fs
+        for w in self.cv.wrap(text, style, fs, self.W - 100):
+            self.ensure(fs * 1.4)
+            self.cv.text(50, self.y, w, style, fs, color)
+            self.y += fs * 1.36
+        self.y += fs * 0.3
+
+    def cards(self, items: list[tuple[str, str]], color=GREEN_DARK):
+        cols = 4 if self.W > 1600 else 2
+        cw = (self.W - 80 - (cols - 1) * 20) / cols
+        big, small = self.fs + 8, max(MIN_FS - 4, self.fs - 6)
+        for i in range(0, len(items), cols):
+            row = items[i:i + cols]
+            h = max(24 + big * 1.25 + len(self.cv.wrap(s, "regular", small, cw - 40)) * small * 1.3 + 18 for _, s in row)
+            self.ensure(h)
+            for j, (b, s) in enumerate(row):
+                x = 40 + j * (cw + 20)
+                self.cv.rrect(x, self.y, cw, h, LIGHT, r=14)
+                self.cv.text(x + 20, self.y + 18, b, "bold", _fit(self.cv, b, "bold", big, cw - 40, 20), color)
+                self.cv.para(x + 20, self.y + 24 + big * 1.25, s, cw - 40, size=small, fill=MUTED, lh=1.3)
+            self.y += h + 18
+
+    def table(self, cols: list[tuple[str, float, str]], rows: list[list], fills: list[list] | None = None,
+              size: float = TABLE_FS, row_h: float | None = None):
+        """Rows split across pages; the header row is repeated on each page."""
+        row_h = row_h or size * 1.75
+        scale = (self.W - 80) / sum(c[1] for c in cols)          # stretch the columns to the page width
+        cols = [(t, w * scale, a) for t, w, a in cols]
+        full = (len(rows) + 1) * row_h + 18
+        if full <= self.cv.H - FOOT_H - self.top:                 # fits a page: keep it in one piece
+            self.ensure(full)
+        i = 0
+        while i < len(rows):
+            self.ensure(row_h * 3)
+            n = max(1, int((self.room() - row_h) // row_h))
+            if 0 < len(rows) - (i + n) < 3:                       # never leave one or two rows on their own
+                n = max(1, len(rows) - i - 3)
+            part = rows[i:i + n]
+            pf = fills[i:i + n] if fills else None
+            self.y = _table(self.cv, 40, self.y, cols, part, size=size, row_h=row_h, fills=pf) + 18
+            i += n
+            if i < len(rows):
+                self.new_page()
+
+    def advice_card(self, label: str, color: str, text: str):
+        fs = self.fs
+        lines = self.cv.wrap(text, "regular", fs, self.W - 150)
+        h = 22 + (fs + 4) * 1.35 + len(lines) * fs * 1.36 + 20
+        self.ensure(h)
+        cv = self.cv
+        cv.rrect(40, self.y, self.W - 80, h, LIGHT, r=14)
+        cv.rect(40, self.y, 12, h, _hex(color))
+        cv.text(72, self.y + 18, label, "bold", fs + 4, _hex(color))
+        yy = self.y + 22 + (fs + 4) * 1.35
+        for l in lines:
+            cv.text(72, yy, l, "regular", fs, INK)
+            yy += fs * 1.36
+        self.y += h + 18
+
+
+def _flow_pages(payload: dict, size, kicker: str, build) -> list[Canvas]:
+    """Largest text (MAX_FS → MIN_FS) with which everything fits one page; at MIN_FS, as many pages as needed."""
+    for fs in FS_STEPS:
+        f = Flow(payload, size, kicker, fs)
+        build(f)
+        if len(f.pages) == 1 or fs == FS_STEPS[-1]:
+            return f.pages
+    return f.pages
+
+
+def _finish(payload: dict, pages: list[Canvas], out_dir: Path, page_id: str, label: str, suffix: str, alt: str) -> list[dict]:
+    out = []
+    n = len(pages)
+    for i, cv in enumerate(pages, start=1):
+        tag = label + (f" ({i}/{n})" if n > 1 else "")
+        _footer(cv, payload, tag)
+        pid = page_id if i == 1 else f"{page_id}_{i}"
+        png, jpg = _save(cv, *_files(payload, out_dir, pid, suffix))
+        out.append({"layer": pid, "label": label if i == 1 else f"{label} ({i})", "png": png, "jpg": jpg,
+                    "alt": alt + (f" (page {i} of {n})" if n > 1 else "")})
+    return out
 
 
 # ------------------------------------------------- summary: key figures ---
 
-def _rain_figures(cv: Canvas, payload: dict, y: float):
-    W = cv.W
+def _rain_figures(f: Flow, payload: dict, level: int = 0):
+    """Key figure cards (range, average, highest, lowest of the 10-day / season total); none at level ≥ 1."""
     total = _values(common.total_layer(payload))
-    if total.empty:
+    if total.empty or level >= 1:
         return
     dekad = payload["type"] == "rainfall_dekad"
     what = "10-day total" if dekad else "season total"
-    w = (W - 80 - 3 * 16) / 4
-    cards = [(f"{total.min():,.0f}–{total.max():,.0f} mm", f"range of the {what}"),
+    f.heading("Key figures", keep=200)
+    f.cards([(f"{total.min():,.0f}–{total.max():,.0f} mm", f"range of the {what}"),
              (f"{total.mean():,.0f} mm", f"CAR average {what}"),
              (f"{total.max():,.0f} mm", f"highest: {_name(total.idxmax())}"),
-             (f"{total.min():,.0f} mm", f"lowest: {_name(total.idxmin())}")]
-    for i, (big, small) in enumerate(cards):
-        _card(cv, 40 + i * (w + 16), y, w, 100, big, small)
-    y += 118
-    cv.text(40, y, "Day by day" if dekad else "Month by month", "bold", 20, GREEN_DARK)
-    y += 30
-    rows = []
-    for l in [l for l in payload["layers"] if l["id"].startswith(("d_", "m_"))]:
-        v = _values(l)
-        if not v.empty:
-            rows.append([l["label"], f"{v.mean():,.0f}", f"{v.min():,.0f}", f"{v.max():,.0f}", _name(v.idxmax())])
-    room = cv.H - 80 - y - 30
-    row_h = max(22, min(30, room / max(len(rows) + 1, 1)))
-    _table(cv, 40, y, [("Day" if dekad else "Month", 170, "l"), ("Average mm", 140, "r"), ("Lowest mm", 130, "r"),
-                       ("Highest mm", 130, "r"), ("Wettest municipality", W - 80 - 570, "l")], rows,
-           size=min(15, row_h * 0.52), row_h=row_h)
+             (f"{total.min():,.0f} mm", f"lowest: {_name(total.idxmin())}")])
 
 
-def _drought_figures(cv: Canvas, payload: dict, y: float):
-    W = cv.W
+_ABBR = {"not affected": "N", "dry condition": "DC", "dry spell": "DS", "drought": "D"}
+
+
+def _drought_figures(f: Flow, payload: dict, level: int = 0):
+    """Province × month table with its key; none at level ≥ 1."""
     by = payload.get("summary", {}).get("by_month_province") or {}
     months = payload["period"].get("months") or list(by)
-    if not by or not months:
+    if not by or not months or level >= 1:
         return
     legend = payload["layers"][0]["legend"]["classes"]
     color = {c["label"]: c["color"] for c in legend}
     provs = sorted({p for m in months for p in by.get(m, {})})
-    cv.text(40, y, "Province outlook by month", "bold", 20, GREEN_DARK)
-    y += 30
-    mw = (W - 80 - 230) / len(months)
-    cols = [("Province", 230, "l")] + [(pd.Period(m, "M").strftime("%b %Y"), mw, "c") for m in months]
-    rows = [[p] + [by.get(m, {}).get(p, "–") for m in months] for p in provs]
+    short = {"Mountain Province": "Mt. Province"}
+    f.heading("Province outlook by month", keep=f.table_keep(len(provs), extra=f.fs * 1.7))
+    f.paragraph("N = not affected · DC = dry condition · DS = dry spell · D = drought", "regular", MUTED,
+                max(MIN_FS - 4, f.fs - 6))                 # the key stays with its table (above it)
+    cols = [("Province", 270, "l")] + [(pd.Period(m, "M").strftime("%b"), 140, "c") for m in months]
+    rows = [[short.get(p, p)] + [_ABBR.get(str(by.get(m, {}).get(p, "")).lower(), "–") for m in months] for p in provs]
     fills = [[None] + [color.get(by.get(m, {}).get(p, ""), None) for m in months] for p in provs]
-    y = _table(cv, 40, y, cols, rows, size=13.5, row_h=36, fills=fills) + 16
-    x = 40
-    for c in legend:
-        cv.rect(x, y + 2, 26, 18, _hex(c["color"]), outline=(80, 80, 80))
-        cv.text(x + 34, y + 11, c["label"], "regular", 15, INK, anchor="lm")
-        x += 54 + cv.width(c["label"], "regular", 15)
-    y += 46
-    if cv.H - 80 - y > 190:
-        cv.text(40, y, "Number of provinces per category", "bold", 20, GREEN_DARK)
-        rows = [[c["label"]] + [sum(1 for p in provs if by.get(m, {}).get(p) == c["label"]) for m in months] for c in legend]
-        _table(cv, 40, y + 30, [("Category", 230, "l")] + cols[1:], rows, size=14, row_h=28)
+    f.table(cols, rows, fills=fills)
 
 
-def _envi_figures(cv: Canvas, payload: dict, y: float):
-    W, H = cv.W, cv.H
+def _envi_figures(f: Flow, payload: dict, level: int = 0):
+    """Municipalities per class (season and months) and the top 10; level 1: without the top 10; level ≥ 2: none."""
+    if level >= 2:
+        return
     layers = [l for l in payload["layers"] if l["id"] == "envi" or l["id"].startswith("m_")]
     season = layers[0]
     classes = season["legend"]["classes"]
     color = {c["label"]: c["color"] for c in classes}
-    cv.text(40, y, "Season outlook and month by month (number of municipalities per class)", "bold", 20, GREEN_DARK)
-    y += 30
-    cw = 92 if W < 1500 else 120
-    rest = W - 80 - 190 - cw * len(classes) - 150
-    cols = [("Period", 190, "l")] + [(c["label"], cw, "c") for c in classes] + [("Crops at risk (ha)", 150, "r"),
-                                                                                ("Most vulnerable", rest, "l")]
+    abbr = {"Very Low": "VL", "Low": "L", "Moderate": "M", "High": "H", "Very High": "VH"}
+    f.heading("Municipalities per class", keep=f.table_keep(len(layers), extra=f.fs * 1.7))
+    f.paragraph("VL = very low · L = low · M = moderate · H = high · VH = very high", "regular", MUTED,
+                max(MIN_FS - 4, f.fs - 6))
+    cols = [("Period", 260, "l")] + [(abbr.get(c["label"], c["label"]), 105, "c") for c in classes] + [("Crops at risk", 230, "r")]
     rows, fills = [], []
     for l in layers:
-        vals = [(k, v) for k, v in l["values"].items() if isinstance(v.get("envi"), (int, float))]
-        counts = {c["label"]: sum(1 for _, v in vals if v["class"] == c["label"]) for c in classes}
-        crops = sum(v.get("crops_raw") or 0 for _, v in vals if v["class"] in RISK)
-        top = max(vals, key=lambda kv: kv[1]["envi"]) if vals else None
-        rows.append(["Season outlook" if l["id"] == "envi" else l["label"]] + [counts[c["label"]] for c in classes]
-                    + [f"{crops:,.0f}", _name(top[0]) if top else "–"])
-        fills.append([None] + [color[c["label"]] if counts[c["label"]] else None for c in classes] + [None, None])
-    room = H - 80 - y
-    row_h = max(22, min(30, room / (len(rows) + 1)))
-    y = _table(cv, 40, y, cols, rows, size=min(14.5, row_h * 0.5), row_h=row_h, fills=fills) + 16
-    vals = sorted(((k, v) for k, v in season["values"].items() if isinstance(v.get("envi"), (int, float))),
-                  key=lambda kv: -kv[1]["envi"])[:10]
-    if H - 80 - y > 200:
-        cv.text(40, y, "Top 10 most vulnerable areas (season outlook)", "bold", 20, GREEN_DARK)
-        y += 30
-        parts = [vals[:5], vals[5:]]
-        pw = (W - 80 - 24) / 2
-        for i, part in enumerate(parts):
-            _table(cv, 40 + i * (pw + 24), y, [("#", 44, "c"), ("Municipality", pw - 44 - 90 - 130, "l"),
-                                                ("ENVI", 90, "r"), ("Class", 130, "c")],
-                   [[i * 5 + j + 1, _name(k), f"{v['envi']:.3f}", v["class"]] for j, (k, v) in enumerate(part)],
-                   size=13.5, row_h=26, fills=[[None, None, None, color.get(v["class"])] for _, v in part])
+        vals = [v for v in l["values"].values() if isinstance(v.get("envi"), (int, float))]
+        counts = {c["label"]: sum(1 for v in vals if v["class"] == c["label"]) for c in classes}
+        crops = sum(v.get("crops_raw") or 0 for v in vals if v["class"] in RISK)
+        name = "Season" if l["id"] == "envi" else pd.Period(l["id"][2:], "M").strftime("%b %Y")
+        rows.append([name] + [counts[c["label"]] for c in classes] + [f"{crops:,.0f} ha"])
+        fills.append([None] + [color[c["label"]] if counts[c["label"]] else None for c in classes] + [None])
+    f.table(cols, rows, fills=fills)
+    if level >= 1:
+        return
+    top = sorted(((k, v) for k, v in season["values"].items() if isinstance(v.get("envi"), (int, float))),
+                 key=lambda kv: -kv[1]["envi"])[:10]
+    f.heading("Top 10 most vulnerable (season)", keep=f.table_keep(len(top)))
+    f.table([("#", 60, "c"), ("Municipality", 520, "l"), ("ENVI", 140, "r"), ("Class", 200, "c")],
+            [[i + 1, _name(k), f"{v['envi']:.2f}", v["class"]] for i, (k, v) in enumerate(top)],
+            fills=[[None, None, None, color.get(v["class"])] for _, v in top])
 
 
-def summary_page(payload: dict, out_dir: Path, size=SQUARE, suffix: str = "") -> dict:
-    """Current condition and expected forecast in words, then the key figures."""
+SUMMARY_LEVELS = {"envi": 3, "drought": 2}       # figure detail levels (0 = all); rainfall: 2
+
+
+def summary_pages(payload: dict, out_dir: Path, size=SQUARE, suffix: str = "") -> list[dict]:
+    """Current condition and expected forecast in words, then the key figures – always ONE page.
+
+    Tried in order (measured on a tiny canvas first, drawn once): all figures at phone-readable text (40 → 28),
+    then with fewer figures (e.g. no ENVI top 10, then none) at 40 → 28, then smaller text (26 → 20)."""
     text = {"drought": _drought_text, "envi": _envi_text}.get(payload["type"], _rain_text)
     figures = {"drought": _drought_figures, "envi": _envi_figures}.get(payload["type"], _rain_figures)
     cur, exp = text(payload)
-    for fs in (16, 15, 14, 13):
-        cv = _canvas(size)
-        W = cv.W
-        y = _header(cv, payload, "Summary")
-        if W >= 1100:   # two panels side by side
-            pw = (W - 80 - 20) / 2
-            y = max(_text_panel(cv, 40, y, pw, "Current condition", cur, fs),
-                    _text_panel(cv, 40 + pw + 20, y, pw, "Expected forecast", exp, fs)) + 20
-        else:
-            y = _text_panel(cv, 40, y, W - 80, "Current condition", cur, fs) + 14
-            y = _text_panel(cv, 40, y, W - 80, "Expected forecast", exp, fs) + 20
-        if y < cv.H * 0.55:
+
+    def build(level: int):
+        def run(f: Flow):
+            f.heading("Current condition")
+            f.bullets(cur)
+            f.gap(10)
+            f.heading("Expected forecast")
+            f.bullets(exp)
+            f.gap(10)
+            figures(f, payload, level)
+        return run
+
+    levels = range(SUMMARY_LEVELS.get(payload["type"], 2))
+    plan = [(lv, fs) for lv in levels for fs in FS_STEPS] + [(lv, fs) for lv in levels for fs in (26, 24, 22, 20)]
+    level, fs = plan[-1]
+    for lv, size_ in plan:
+        m = Flow(payload, size, "Summary", size_, measure=True)
+        build(lv)(m)
+        if len(m.pages) == 1:
+            level, fs = lv, size_
             break
-    figures(cv, payload, y)
-    _footer(cv, payload, "Summary")
-    png, jpg = _save(cv, *_files(payload, out_dir, "summary", suffix))
-    return {"layer": "summary", "label": "Summary", "png": png, "jpg": jpg,
-            "alt": f"{PRODUCT_NAMES.get(payload['type'], '')}, {payload['period']['label']}: current condition, "
-                   "expected forecast and key figures"}
+    f = Flow(payload, size, "Summary", fs)
+    build(level)(f)
+    pages = f.pages[:1]                                    # never more than one summary page
+    return _finish(payload, pages, out_dir, "summary", "Summary", suffix,
+                   f"{PRODUCT_NAMES.get(payload['type'], '')}, {payload['period']['label']}: current condition, "
+                   "expected forecast and key figures")
 
 
 # -------------------------------------------- agricultural recommendations ---
 
-_ADVICE = [("advice_rice", "Rice", "#2e7d32"), ("advice_corn", "Corn", "#e0a100"), ("advice_hvc", "High-value crops", "#7b3fa0")]
+_ADVICE = [("advice_rice", "Rice", "#2e7d32"), ("advice_corn", "Corn", "#e0a100"), ("advice_hvc", "High-value crops", "#7b3fa0"),
+           ("advice_livestock", "Livestock & poultry", "#8d5524")]
 
 
 def _rec_lines(text: str) -> list[tuple[str, str]]:
@@ -597,58 +737,54 @@ def _rec_lines(text: str) -> list[tuple[str, str]]:
     return out
 
 
-def recommendations_page(payload: dict, out_dir: Path, size=SQUARE, suffix: str = "") -> dict:
+def recommendations_pages(payload: dict, out_dir: Path, size=SQUARE, suffix: str = "") -> list[dict]:
     """Agricultural recommendations: crop advice first (rice, corn, high-value crops), then the advisory."""
     t = payload.get("texts", {})
     advice = [(lab, col, t.get(k)) for k, lab, col in _ADVICE if t.get(k)]
     lines = _rec_lines(t.get("recommendations", ""))
-    for fs in (19, 18, 17, 16, 15, 14, 13, 12, 11, 10):
-        cv = _canvas(size)
-        W, H = cv.W, cv.H
-        y = _header(cv, payload, "Agricultural recommendations")
+
+    def build(f: Flow):
         if advice:
-            cv.text(40, y, "Crop advice", "bold", 24, GREEN_DARK)
-            y += 38
-            colw = (W - 80 - 2 * 16) / len(advice)
-            top = y
-            for i, (lab, col, txt) in enumerate(advice):
-                x = 40 + i * (colw + 16)
-                lh = len(cv.wrap(txt, "regular", fs, colw - 40)) * fs * 1.38
-                cv.rrect(x, top, colw, lh + 66, LIGHT, r=12)
-                cv.rect(x, top, 8, lh + 66, _hex(col))
-                cv.text(x + 24, top + 16, lab, "bold", fs + 3, _hex(col))
-                y = max(y, cv.para(x + 24, top + 50, txt, colw - 40, size=fs) + 22)
-            y += 8
+            f.heading("Crop advice", keep=200)
+            for lab, col, txt in advice:
+                f.advice_card(lab, col, txt)
         if lines:
-            cv.text(40, y, "Agricultural advisory" if advice else "Recommended actions", "bold", 24, GREEN_DARK)
-            y += 40
+            f.heading("Agricultural advisory" if advice else "Recommended actions", keep=f.fs * 3)
             for kind, line in lines:
                 if kind == "head":
-                    y = cv.para(40, y + 4, line, W - 80, "bold", fs, GREEN_DARK) + 2
-                elif kind == "num":
-                    y = cv.para(52, y, line, W - 104, size=fs) + 3
+                    f.ensure(f.fs * 3.2)
+                    f.paragraph(line.rstrip(":") + ":", "bold", GREEN_DARK)
                 else:
-                    y = cv.rich_bullet(52, y, "", line, W - 104, size=fs) + 2
-        if y <= H - 80:
-            break
-    if t.get("notes"):
-        cv.para(40, min(y + 8, cv.H - 110), t["notes"], cv.W - 80, "italic", 13, MUTED)
-    _footer(cv, payload, "Agricultural recommendations")
-    png, jpg = _save(cv, *_files(payload, out_dir, "recommendations", suffix))
-    return {"layer": "recommendations", "label": "Recommendations", "png": png, "jpg": jpg,
-            "alt": f"{PRODUCT_NAMES.get(payload['type'], '')}, {payload['period']['label']}: agricultural recommendations"}
+                    f.bullets([line])
+        if t.get("notes"):
+            f.gap(6)
+            f.paragraph(t["notes"], "italic", MUTED, max(MIN_FS - 6, f.fs - 10))
+
+    pages = _flow_pages(payload, size, "Agricultural recommendations", build)
+    return _finish(payload, pages, out_dir, "recommendations", "Recommendations", suffix,
+                   f"{PRODUCT_NAMES.get(payload['type'], '')}, {payload['period']['label']}: agricultural recommendations")
 
 
 # ------------------------------------------------------------------ ENVI ---
 
 def envi_pages(payload: dict, out_dir: Path) -> tuple[dict, list[dict]]:
     """ENVI title, summary and recommendations pages, each landscape (presentation) and portrait (A4 poster).
-    Returns (title entry, [summary entry, recommendations entry]) for the manifest."""
+    Returns (title entry, [summary and recommendations entries, in order]) for the manifest. The two formats may
+    need a different number of pages; a page that exists in one format only is shown in that format only."""
     out: dict[str, dict] = {}
+    order: list[str] = []
     for fmt, size, kind in (("landscape", LANDSCAPE, "presentation"), ("portrait", PORTRAIT, "poster")):
-        made = [title_page(payload, out_dir, size, fmt), summary_page(payload, out_dir, size, fmt),
-                recommendations_page(payload, out_dir, size, fmt)]
+        made = [title_page(payload, out_dir, size, fmt), *summary_pages(payload, out_dir, size, fmt),
+                *recommendations_pages(payload, out_dir, size, fmt)]
         for p in made:
-            e = out.setdefault(p["layer"], {"layer": p["layer"], "label": p["label"], "alt": p["alt"]})
-            e[kind], e[f"{kind}_web"] = p["png"].name, p["jpg"].name
-    return out["cover"], [out["summary"], out["recommendations"]]
+            if p["layer"] not in out:
+                out[p["layer"]] = {"layer": p["layer"], "label": p["label"], "alt": p["alt"]}
+                order.append(p["layer"])
+            out[p["layer"]][kind], out[p["layer"]][f"{kind}_web"] = p["png"].name, p["jpg"].name
+
+    def rank(pid: str):
+        base, _, n = pid.partition("_")
+        return ({"cover": 0, "summary": 1, "recommendations": 2}.get(base, 9), int(n or 1))
+
+    rest = sorted((pid for pid in order if pid != "cover"), key=rank)
+    return out["cover"], [out[pid] for pid in rest]

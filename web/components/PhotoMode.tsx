@@ -21,7 +21,20 @@ const href = (d?: Download) => d?.url ?? d?.path;
 export type PhotoView = "landscape" | "portrait";
 
 /** Rainfall / drought report pages around the maps (not map layers): title first, summary and recommendations last. */
-const PAGES = ["cover", "summary", "recommendations"];
+const PAGE_RE = /^(cover|summary|recommendations)(?:_(\d+))?$/;
+const isPage = (id: string) => PAGE_RE.test(id);
+
+/** Report pages of a product (title first, then summary and recommendations pages in order), from its downloads:
+ * long summaries / recommendations continue on extra pages (summary_2, recommendations_2, …). */
+function pageIds(dl: Download[]): { first: string[]; last: string[] } {
+  const ids = [...new Set(dl.map((d) => d.layer ?? "").filter(isPage))];
+  const rank = (id: string) => {
+    const m = id.match(PAGE_RE)!;
+    return { cover: 0, summary: 1, recommendations: 2 }[m[1] as "cover"] * 1000 + Number(m[2] ?? 1);
+  };
+  ids.sort((a, b) => rank(a) - rank(b));
+  return { first: ids.filter((i) => i.startsWith("cover")), last: ids.filter((i) => !i.startsWith("cover")) };
+}
 
 /**
  * Photos for photo mode.
@@ -39,11 +52,12 @@ export function photosOf(payload: Payload | null, view: PhotoView = "landscape")
     const maps = payload.layers.filter((x) => x.id === "envi" || x.id.startsWith("m_"));
     const labels = new Map(maps.map((l) => [l.id, l.id === "envi" ? `Season outlook (${payload.period.label})` : l.label]));
     const [web, full, pdf] = view === "portrait" ? ["poster_web", "poster", "poster_pdf"] : ["presentation_web", "presentation", "presentation_pdf"];
-    for (const id of [PAGES[0], ...maps.map((l) => l.id), ...PAGES.slice(1)]) {
+    const pg = pageIds(dl);
+    for (const id of [...pg.first, ...maps.map((l) => l.id), ...pg.last]) {
       const files = dl.filter((d) => d.layer === id);
       const img = pick(files, web, full, "jpg", "png");
       if (!img) continue;
-      const page = PAGES.includes(id);
+      const page = isPage(id);
       const label = page ? img.group ?? id : labels.get(id) ?? id;
       out.push({ id, layer: page ? undefined : id, label, src: href(img)!, alt: img.alt ?? `ENVI ${label}`,
         pkg: href(pick(files, full, "png")), print: href(pick(files, pdf, "pdf")) });
@@ -55,11 +69,12 @@ export function photosOf(payload: Payload | null, view: PhotoView = "landscape")
   const out: Photo[] = [];
   // title page first, then one map per day / month, then the summary and recommendations pages
   const labels = new Map(payload.layers.map((l) => [l.id, l.label]));
-  for (const id of [PAGES[0], ...payload.layers.map((l) => l.id), ...PAGES.slice(1)]) {
+  const pg = pageIds(dl);
+  for (const id of [...pg.first, ...payload.layers.map((l) => l.id), ...pg.last]) {
     const files = by.get(id) ?? [];
     const img = pick(files, "jpg", "png");
     if (!img) continue;
-    const page = PAGES.includes(id);
+    const page = isPage(id);
     const label = page ? img.group ?? id : labels.get(id) ?? id;
     out.push({ id, layer: page ? undefined : id, label, src: href(img)!, alt: img.alt ?? label,
       pkg: href(pick(files, "png")), print: href(pick(files, "pdf")) });
@@ -75,7 +90,10 @@ export default function PhotoMode({ payload, layerId, onLayer, onClose }: {
   onClose: () => void;
 }) {
   // ENVI: landscape presentation or portrait A4 poster, for the season outlook and every month
-  const [view, setView] = useState<PhotoView>("landscape");
+  // phones: the portrait A4 version fits the screen and stays readable without zooming
+  const [view, setView] = useState<PhotoView>(() =>
+    typeof window !== "undefined" && window.matchMedia("(max-width: 820px)").matches ? "portrait" : "landscape",
+  );
   const hasPosters = payload.type === "envi" && (payload.downloads ?? []).some((d) => d.kind === "poster_web" || d.kind === "poster");
   const photos = useMemo(() => photosOf(payload, view), [payload, view]);
   // the photo on screen: a map follows the dashboard's layer; a page (title, summary, recommendations) is kept here

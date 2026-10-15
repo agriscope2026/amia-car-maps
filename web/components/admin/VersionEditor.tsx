@@ -25,6 +25,7 @@ const FARM_FIELDS: { key: keyof Texts; crop: string; label: string }[] = [
   { key: "advice_rice", crop: "rice", label: "Farm recommendation – Rice" },
   { key: "advice_corn", crop: "corn", label: "Farm recommendation – Corn" },
   { key: "advice_hvc", crop: "hvc", label: "Farm recommendation – HVC (high-value crops)" },
+  { key: "advice_livestock", crop: "livestock", label: "Farm recommendation – Livestock & poultry" },
 ];
 
 export default function VersionEditor({ version, role, geo }: { version: any; role: string; geo: Gazetteer }) {

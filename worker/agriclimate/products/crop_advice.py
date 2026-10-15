@@ -1,5 +1,5 @@
-"""Farm recommendations for rice, corn and high-value crops (HVC), shown under the legend of the 10-day,
-seasonal and drought maps. Drafted from the forecast (rule-based) and always editable in the admin.
+"""Farm recommendations for rice, corn, high-value crops (HVC) and livestock & poultry, shown under the legend of the
+10-day, seasonal and drought maps. Drafted from the forecast (rule-based) and always editable in the admin.
 
 Each text is kept short (about 230 characters) so it fits the map panel.
 """
@@ -8,8 +8,8 @@ from __future__ import annotations
 from ..envi.config import month_label
 from . import common
 
-CROPS = ("rice", "corn", "hvc")
-LABELS = {"rice": "Rice", "corn": "Corn", "hvc": "HVC"}
+CROPS = ("rice", "corn", "hvc", "livestock")
+LABELS = {"rice": "Rice", "corn": "Corn", "hvc": "HVC", "livestock": "Livestock"}
 TEXT_KEYS = {c: f"advice_{c}" for c in CROPS}     # keys in payload["texts"]
 
 
@@ -37,6 +37,8 @@ def rainfall_dekad(payload: dict) -> dict[str, str]:
                     "stalk rot and fall armyworm after the rains.",
             "hvc": "Use raised beds, plastic mulch or rain shelters. Spray protectant fungicide before rains (late "
                    "blight, clubroot) and harvest mature vegetables early.",
+            "livestock": f"Move animals and poultry to dry, raised shelters before heavy rain{when}. Keep feed dry, "
+                         "clear drainage in pens and watch for pneumonia, foot rot and diarrhea.",
         }
     if dry:
         return {
@@ -46,12 +48,16 @@ def rainfall_dekad(payload: dict) -> dict[str, str]:
                     "is moist enough.",
             "hvc": "Water early in the morning, use drip irrigation and mulch. Give priority to seedlings and newly "
                    "transplanted crops.",
+            "livestock": "Give clean drinking water and shade; water and graze animals in the cooler hours. Store "
+                         "forage and silage and watch for heat stress in poultry and swine.",
         }
     return {
         "rice": "Good conditions for transplanting and fertilizer application between rain days. Keep 3–5 cm of "
                 "water in the paddies and monitor for pests.",
         "corn": "Suitable for planting and side-dressing. Hill-up to improve drainage and monitor fall armyworm.",
         "hvc": "Good for transplanting vegetables. Keep drainage open and watch for fungal diseases after rain.",
+        "livestock": "Good pasture growth: store surplus forage as hay or silage. Keep pens clean and dry, and deworm "
+                     "and vaccinate animals on schedule.",
     }
 
 
@@ -68,6 +74,9 @@ def rainfall_seasonal(payload: dict) -> dict[str, str]:
                 "Mulch and keep drainage open in the wettest months.",
         "hvc": "Plan staggered planting with irrigation (SWIP/SSIP, drip). Use rain shelters in wet months and mulch "
                "in dry months; prioritise high-value crops under irrigation.",
+        "livestock": ("Make silage or hay in the wetter months and store it for the dry months"
+                      + (f" ({', '.join(dry[:3])})" if dry else "") + ". Secure water for animals and keep shelters "
+                      "dry and well ventilated.")[:240],
     }
 
 
@@ -85,6 +94,8 @@ def drought(payload: dict) -> dict[str, str]:
                 "enrol standing crops in PCIC crop insurance.",
         "hvc": "Reduce planting to the area you can irrigate. Use drip irrigation, mulching and water "
                "impounding; prioritise crops with assured water.",
+        "livestock": f"Secure water and forage for livestock and poultry{by}: store hay and silage, repair water "
+                     "impounding and reduce stocking if water is short. Watch for heat stress.",
     }
 
 
@@ -97,6 +108,6 @@ def draft(payload: dict) -> dict[str, str] | None:
 
 
 def advice_of(payload: dict) -> dict[str, str]:
-    """The (possibly edited) farm recommendations of a payload: {'rice': …, 'corn': …, 'hvc': …}."""
+    """The (possibly edited) farm recommendations of a payload: {'rice': …, 'corn': …, 'hvc': …, 'livestock': …}."""
     t = payload.get("texts", {})
     return {c: (t.get(TEXT_KEYS[c]) or "").strip() for c in CROPS if (t.get(TEXT_KEYS[c]) or "").strip()}

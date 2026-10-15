@@ -273,8 +273,11 @@ def test_drought_template_roundtrip():
 def test_exports_are_map_images(tmp_path):
     p = rainfall_dekad.build(DEKAD.read_bytes(), DEKAD.name, DEKAD_SETTINGS)
     m = exports.export_product(p, tmp_path)
-    assert m["labels_ok"] and len(m["maps"]) == 13                       # title page, 10 daily maps, summary, recommendations
-    assert [x["layer"] for x in m["maps"]][::11] == ["cover", "summary"] and m["maps"][-1]["layer"] == "recommendations"
+    layers = [x["layer"] for x in m["maps"]]       # title page, 10 daily maps, summary page(s), recommendations page(s)
+    pages_after = [l for l in layers[11:]]
+    assert m["labels_ok"] and layers[0] == "cover" and all(l.startswith("d_") for l in layers[1:11])
+    assert pages_after[0] == "summary" and pages_after[-1].startswith("recommendations")
+    assert all(l.split("_")[0] in ("summary", "recommendations") for l in pages_after)
     assert "total" not in {mp["layer"] for mp in m["maps"]}
     reps = json.loads((tmp_path / "label_report.json").read_text(encoding="utf-8"))
     assert all(r["placed"] == 83 and r["overlaps"] == [] for r in reps.values())
@@ -287,8 +290,8 @@ def test_exports_are_map_images(tmp_path):
     assert max(Image.open(tmp_path / mp["jpg"]).size) == exports.PREVIEW_WIDTH       # sharp preview for photo mode
     assert list(m["files"]) == ["zip"]
     names = zipfile.ZipFile(tmp_path / m["files"]["zip"]).namelist()
-    assert len(names) == 13 and all(n.endswith(".png") for n in names)
-    for page in (m["maps"][0], m["maps"][-2], m["maps"][-1]):              # pages: square like the maps, with a preview
+    assert len(names) == len(layers) and all(n.endswith(".png") for n in names)
+    for page in (m["maps"][0], m["maps"][11], m["maps"][-1]):              # pages: square like the maps, with a preview
         assert Image.open(tmp_path / page["png"]).size == (3600, 3600) and (tmp_path / page["jpg"]).exists()
     assert "CAR_rainfall_dekad_2026-10-01_png.png" in names
 
@@ -301,7 +304,7 @@ def test_farm_recommendations_drafted_for_rice_corn_hvc():
     d = api.build_payload("drought", {"file": (config.DEFAULT_FILES["drought"].read_bytes(), "d.csv")},
                           {"issue_date": "2026-09-15", "period_start": "2026-10"})
     adv = crop_advice.advice_of(d)
-    assert set(adv) == {"rice", "corn", "hvc"} and all(len(v) <= 260 for v in adv.values())
+    assert set(adv) == {"rice", "corn", "hvc", "livestock"} and all(len(v) <= 260 for v in adv.values())
     assert "January 2027" in adv["rice"]                       # drought onset in the advice
     assert d["crop_advice_draft"] == adv
     # edited text wins over the draft
@@ -311,7 +314,7 @@ def test_farm_recommendations_drafted_for_rice_corn_hvc():
     assert crop_advice.advice_of(e)["rice"] == "Edited rice advice."
     s = api.build_payload("rainfall_seasonal", {"file": (SEASONAL.read_bytes(), SEASONAL.name)},
                           {"issue_date": "2026-09-30"})
-    assert set(crop_advice.advice_of(s)) == {"rice", "corn", "hvc"}
+    assert set(crop_advice.advice_of(s)) == {"rice", "corn", "hvc", "livestock"}
     assert "season_total" not in {lyr["id"] for lyr in s["layers"]}     # season total: no map, kept per area
     assert common.total_layer(s)["values"]["ABRA|BANGUED"]["value"] > 0
 
@@ -363,11 +366,13 @@ def test_envi_exports_with_crop_circles(tmp_path):
     c = build_crops(config.DEFAULT_FILES["crops"].read_bytes(), config.DEFAULT_FILES["crops"].name, {"as_of": "2026-09-15"})
     ov = {"as_of": c["as_of"], "crops": {"Rice": c["colors"]["Rice"]}, "values": c["values"]}
     m = exports.export_product(p, tmp_path, {**s, "crop_overlay": ov}, files)
-    assert [x["layer"] for x in m["maps"]][0] == "cover" and [x["layer"] for x in m["maps"]][-2:] == ["summary", "recommendations"]
+    layers = [x["layer"] for x in m["maps"]]
+    n_pages = sum(1 for l in layers if l.split("_")[0] in ("summary", "recommendations"))
+    assert layers[0] == "cover" and "summary" in layers and layers[-1].startswith("recommendations")
     pg = m["maps"][0]                                                              # title page: landscape + portrait
     assert Image.open(tmp_path / pg["presentation"]).size == (5760, 3240)
     assert Image.open(tmp_path / pg["poster"]).size == (3720, 5262)
-    m = {**m, "maps": m["maps"][1:-2]}                                             # the season outlook and months
+    m = {**m, "maps": m["maps"][1:-n_pages]}                                       # the season outlook and months
     mp = m["maps"][0]
     assert m["labels_ok"] and mp["layer"] == "envi"
     assert Image.open(tmp_path / mp["presentation"]).size == (5760, 3240)          # high-definition presentation

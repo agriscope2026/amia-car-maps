@@ -4,7 +4,7 @@ import path from "path";
 import { audit, deleteVersion, getVersion, LOCAL_EXPORTS_DIR, updateDraft } from "@/lib/server/repo";
 
 const TEXT_KEYS = ["title", "subtitle", "notes", "disclaimer", "sources", "recommendations", "advice_rice", "advice_corn",
-  "advice_hvc"] as const;
+  "advice_hvc", "advice_livestock"] as const;
 
 export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> }) {
   try {

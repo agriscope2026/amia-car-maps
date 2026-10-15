@@ -100,16 +100,17 @@ async function publishFlow(name, preview, settings, check) {
   if (pub.type === "envi") {
     // ENVI: a presentation (landscape) + A4 poster (portrait) PNG for the title page, the season outlook, each month,
     // the summary and the recommendations; no PDFs
+    // (the summary / recommendations may run over several pages)
     const n = pub.layers.filter((l) => l.id === "envi" || l.id.startsWith("m_")).length + 3;
-    assert(real.filter((d) => d.kind === "presentation").length === n, "one presentation per page / season / month");
-    assert(real.filter((d) => d.kind === "poster").length === n, "one A4 poster per page / season / month");
+    assert(real.filter((d) => d.kind === "presentation").length >= n, "a presentation per page / season / month");
+    assert(real.filter((d) => d.kind === "poster").length >= n, "an A4 poster per page / season / month");
     assert(["cover", "summary", "recommendations"].every((p) => real.some((d) => d.layer === p)), "ENVI title, summary and recommendations pages");
     assert(real.every((d) => ["presentation", "poster", "zip"].includes(d.kind)), "ENVI: presentation and poster PNGs and the ZIP only");
     const png = new Uint8Array(await call(real.find((d) => d.kind === "presentation").url));
     assert(png[1] === 0x50 && png[2] === 0x4e && png[3] === 0x47, "presentation is a PNG");
   } else {
     // one PNG per map plus the title, summary and recommendations pages; no PDFs
-    assert(real.filter((d) => d.kind === "png").length === pub.layers.length + 3, "one PNG per map + 3 pages");
+    assert(real.filter((d) => d.kind === "png").length >= pub.layers.length + 3, "one PNG per map + the report pages");
     assert(["cover", "summary", "recommendations"].every((p) => real.some((d) => d.layer === p)), "title, summary and recommendations pages");
     assert(real.every((d) => ["png", "zip"].includes(d.kind)), "only map images and the ZIP");
   }
@@ -119,8 +120,8 @@ async function publishFlow(name, preview, settings, check) {
   if (name === "drought") {
     const recs = "- E2E edited recommendation on a published version.";
     const rice = "E2E rice advice: drain paddies before heavy rain.";
-    assert(preview.payload.texts.advice_rice && preview.payload.texts.advice_corn && preview.payload.texts.advice_hvc,
-      "farm recommendations drafted for rice, corn and HVC");
+    assert(preview.payload.texts.advice_rice && preview.payload.texts.advice_corn && preview.payload.texts.advice_hvc
+      && preview.payload.texts.advice_livestock, "farm recommendations drafted for rice, corn, HVC and livestock");
     await call(`/api/admin/versions/${draft.id}`, { method: "PATCH", json: { texts: { recommendations: recs, advice_rice: rice } } });
     cookie = "";
     const live = await call(`/api/public/products/${draft.id}`);

@@ -214,7 +214,7 @@ export default function AreaDialog({ areaKey, geo, payload, layer, crops, change
             </section>
           )}
 
-          {t && (t.advice_rice || t.advice_corn || t.advice_hvc) && (
+          {t && (t.advice_rice || t.advice_corn || t.advice_hvc || t.advice_livestock) && (
             <div className="dlg-card dlg-farm">
               <FarmAdvice texts={t} />
             </div>

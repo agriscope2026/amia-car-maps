@@ -23,7 +23,7 @@ from .products.crop_advice import LABELS
 COMPASS = (0.22, 0.84, 0.055)                 # x, y, radius (axes fraction) – sample position
 SCALE_BAR = (0.60, 0.035, 0.30, 0.03)         # x, y, w, h (axes fraction), bottom-right
 INK = "#1f2428"
-CROP_COLORS = {"rice": "#2e7d32", "corn": "#e0a100", "hvc": "#7b3fa0"}
+CROP_COLORS = {"rice": "#2e7d32", "corn": "#e0a100", "hvc": "#7b3fa0", "livestock": "#8d5524"}
 RIVER_COLOR = "#1f78d1"
 WATER_COLOR = "#3a8fd8"
 WATER_EDGE = "#1c5fa8"
@@ -120,14 +120,13 @@ def farm_block(fig, W: float, H: float, x: float, y0: float, y1: float, advice: 
     def ftxt(xx, yy, s, **kw):
         fig.text(xx / W, 1 - yy / H, s, **kw)
 
-    ftxt(x + 2, y0, "FARM RECOMMENDATIONS", ha="left", va="top", fontsize=8.6, fontweight="bold", color="#0b532f")
-    y = y0 + 5.2
+    ftxt(x + 2, y0, "FARM RECOMMENDATIONS", ha="left", va="top", fontsize=10, fontweight="bold", color="#0b532f")
+    y = y0 + 6.2
     chip_w, gap = 12.5, 2.0
     text_w = 86 - chip_w - gap - 2
     avail = y1 - y
-    # largest font that fits every crop
-    # largest font that fits (bigger text when the legend is short, so the panel is not left empty)
-    for fs in (9.0, 8.6, 8.2, 7.8, 7.4, 7.0, 6.7, 6.4, 6.1, 5.8, 5.5, 5.2):
+    # largest font that fits every crop: big when there is little text, smaller as the advice grows
+    for fs in (13.0, 12.5, 12.0, 11.5, 11.0, 10.5, 10.0, 9.5, 9.0, 8.6, 8.2, 7.8, 7.4, 7.0, 6.7, 6.4, 6.1, 5.8, 5.5, 5.2):
         wrapped = {c: _wrap_mm(t, text_w, fs) for c, t in advice.items()}
         line_h = fs * 0.3528 * 1.32 * 1.18          # matplotlib line height = linespacing × font height
         need = sum(max(len(v), 1) * line_h + 3.0 for v in wrapped.values())
@@ -143,8 +142,9 @@ def farm_block(fig, W: float, H: float, x: float, y0: float, y1: float, advice: 
         fig.add_artist(FancyBboxPatch(((x + 2) / W, 1 - (y + chip_h) / H), chip_w / W, chip_h / H,
                                       boxstyle="round,pad=0,rounding_size=0.004", transform=fig.transFigure,
                                       facecolor=CROP_COLORS.get(crop, "#555555"), edgecolor="none"))
-        ftxt(x + 2 + chip_w / 2, y + chip_h / 2, LABELS.get(crop, crop).upper(), ha="center", va="center",
-             fontsize=min(7.4, fs), fontweight="bold", color="white")
+        chip = LABELS.get(crop, crop).upper()
+        ftxt(x + 2 + chip_w / 2, y + chip_h / 2, chip, ha="center", va="center",      # label fitted to the chip
+             fontsize=min(8.6, fs, (chip_w - 1.5) / (len(chip) * 0.66 * 0.3528)), fontweight="bold", color="white")
         ftxt(x + 2 + chip_w + gap, y - 0.3, "\n".join(lines), ha="left", va="top", fontsize=fs, color=INK,
              linespacing=1.32)
         y += max(h, chip_h) + 3.0
@@ -250,10 +250,11 @@ def recs_block(fig, W: float, H: float, x: float, y0: float, y1: float, text: st
     def ftxt(xx, yy, s, **kw):
         fig.text(xx / W, 1 - yy / H, s, **kw)
 
-    ftxt(x + 2, y0, title, ha="left", va="top", fontsize=8.6, fontweight="bold", color="#0b532f")
-    y = y0 + 5.2
+    ftxt(x + 2, y0, title, ha="left", va="top", fontsize=10, fontweight="bold", color="#0b532f")
+    y = y0 + 6.2
     width = 84
-    for fs in (7.4, 7.0, 6.6, 6.2, 5.9, 5.6, 5.3):
+    # largest font that fits: big when there are few recommendations, smaller as they grow
+    for fs in (11.0, 10.5, 10.0, 9.5, 9.0, 8.5, 8.0, 7.4, 7.0, 6.6, 6.2, 5.9, 5.6, 5.3):
         line_h = fs * 0.3528 * 1.3 * 1.18
         blocks = []
         for l in lines:

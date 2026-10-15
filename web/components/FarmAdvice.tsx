@@ -1,6 +1,6 @@
 import { FARM_CROPS, type Texts } from "@/lib/types";
 
-/** Farm recommendations for rice, corn and high-value crops (10-day, seasonal and drought products). */
+/** Farm recommendations for rice, corn, high-value crops and livestock & poultry (10-day, seasonal and drought). */
 export function FarmAdvice({ texts }: { texts: Texts }) {
   const items = FARM_CROPS.filter((c) => (texts[c.key] ?? "").trim());
   if (!items.length) return null;

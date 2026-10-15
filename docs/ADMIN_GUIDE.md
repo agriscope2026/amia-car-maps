@@ -136,6 +136,12 @@ them:
   observed PAGASA situation when the forecast was fetched from DroughtCaster) and the **expected forecast** in plain
   sentences, then the key figures.
 - **Agricultural recommendations page:** the rice, corn and high-value crop advice first, then the advisory.
+- **Readable on a phone:** the summary and recommendations pages use large text that adjusts to the amount of content
+  (bigger when there is little to say). The summary is always one page: when there is a lot to say, the less
+  important figures are left out first. Long recommendations continue on another page ("Recommendations (1/2)",
+  "(2/2)") rather than becoming too small to read on a phone. On a phone, ENVI photo mode opens in the
+  portrait A4 format. The farm recommendations on the maps and the ENVI recommended actions also use the largest text
+  that fits their space.
 - **Zoom:** use the + / − / Fit / 100% buttons, the mouse wheel, a double-click, or two fingers on a phone. Drag to
   move around a zoomed image.
 - **Moving between images:** ‹ › or the arrow keys go to the next or previous image. Esc closes photo mode.
