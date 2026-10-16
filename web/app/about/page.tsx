@@ -33,13 +33,18 @@ export default function About() {
             <strong>Historical El Niño damage</strong>: the mean damaged crop area per event year, in hectares (ha).
           </li>
           <li>
-            <strong>Standing crops</strong>: rice + corn area in hectares (ha) on the inventory date.
+            <strong>Standing crops</strong>: rice + corn area in hectares (ha) on the inventory date, plus the high-value crops
+            (vegetables, root crops, spices, cut flowers, fruit and plantation crops) standing on the same date, computed from
+            the HVCDP planting records. When a livestock &amp; poultry inventory is included, this indicator becomes
+            <strong> exposure</strong>: the crop area and the livestock (heads converted to livestock units, e.g. carabao 0.7,
+            swine 0.25, chicken 0.01 per head) are each normalized to 0–1 and combined (by default 75 % crops, 25 %
+            livestock) – hectares and heads are never added together.
           </li>
         </ul>
         <p>
           Each indicator is min–max normalized to 0–1 (0 when all values are equal). The index is the weighted sum of the
-          normalized indicators. By default drought forecast counts for half (0.5) and historical damage and standing crops
-          for a quarter each (0.25); a map states other weights if they were used:
+          normalized indicators. By default the drought forecast counts for 0.7 and historical damage and standing crops
+          (exposure) for 0.15 each; a map states other weights if they were used:
         </p>
         <div className="formula" role="math" aria-label="x norm equals x minus x min, divided by x max minus x min">
           x<sub>norm</sub> = (x − x<sub>min</sub>) / (x<sub>max</sub> − x<sub>min</sub>)
@@ -54,7 +59,7 @@ export default function About() {
         </div>
         <p className="small muted">
           where x<sub>min</sub> and x<sub>max</sub> are the lowest and highest values of that indicator across all areas,
-          and the weights w<sub>D</sub> + w<sub>H</sub> + w<sub>C</sub> = 1 (default 0.5, 0.25 and 0.25). ENVI ranges from 0 (least
+          and the weights w<sub>D</sub> + w<sub>H</sub> + w<sub>C</sub> = 1 (default 0.7, 0.15 and 0.15). ENVI ranges from 0 (least
           vulnerable) to 1 (most vulnerable). If any indicator is missing for an area, its ENVI is “No data”.
         </p>
         <p>

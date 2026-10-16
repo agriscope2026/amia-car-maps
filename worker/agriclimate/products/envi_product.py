@@ -1,7 +1,9 @@
 """ENVI – El Niño Vulnerability Index: the prototype's method wrapped as a portal product.
 
 Inputs (dataset → file): ``drought`` (provincial monthly categories), ``damage`` (historical damage, ha),
-``crops`` (standing crops, ha). Exports reuse the prototype pipeline (``envi.pipeline.run``).
+``crops`` (standing rice / corn, ha) and, optional, ``hvc`` (HVCDP Regional Summary → HVC standing area as of the
+crops date) and ``livestock`` (heads → TLU). With livestock the crops indicator becomes crops & livestock exposure
+(see ``envi.exposure``). Exports reuse the prototype pipeline (``envi.pipeline.run``).
 """
 from __future__ import annotations
 
@@ -16,6 +18,8 @@ TYPE = "envi"
 TITLE = "El Niño Vulnerability Index – CAR"
 DEFAULT_SOURCE = ("DOST-PAGASA drought forecast; DA-RFO-CAR historical El Niño damage and standing crops. "
                   "Index: DA-RFO-CAR AMIA")
+EXPOSURE_COLS = ["crops_area_norm", "hvc_short_ha", "hvc_perennial_ha", "livestock_raw", "livestock_norm",
+                 "livestock_heads"]
 
 
 def compute(files: dict, settings: dict | None = None):
@@ -53,7 +57,7 @@ def build(files: dict, settings: dict | None = None) -> dict:
     t = df.set_index("area_key")
     crop_cols = [c for c in t.columns if c.startswith("crop_")]
     extra = {c: t[c] for c in ["rank", "hazard_raw", "damage_raw", "crops_raw", "hazard_norm", "damage_norm",
-                               "crops_norm"] + crop_cols}
+                               "crops_norm"] + crop_cols + [c for c in EXPOSURE_COLS if c in t]}
     legend = classes.preset("envi")
     br = meta["breaks"]
     for i, c in enumerate(legend["classes"]):          # class ranges for the legend (retained on every map)
@@ -76,14 +80,21 @@ def build(files: dict, settings: dict | None = None) -> dict:
         "source": settings.get("source") or DEFAULT_SOURCE,
         "layers": layers,
         "summary": {k: meta["summary"][k] for k in ("class_counts", "crop_at_risk_ha", "crop_at_risk_by_crop",
-                                                   "crop_total_ha", "n_at_risk", "top10", "hotspots")},
+                                                   "crop_total_ha", "n_at_risk", "top10", "hotspots",
+                                                   "livestock_at_risk_tlu", "livestock_total_tlu",
+                                                   "livestock_at_risk_heads")
+                    if k in meta["summary"]},
         "method": {"weights": meta["weights"], "classification": meta["classification"], "breaks": meta["breaks"],
                    "hazard": meta["hazard_note"] + f" Normalized: {meta['hazard_method']}.",
-                   "damage": meta["damage_note"], "crops": meta["crops_note"],
+                   "damage": meta["damage_note"], "crops": meta["crops_note"], "crops_label": meta["crops_label"],
                    "formula": "ENVI = Σ weight × min–max normalized indicator",
                    "monthly": "Monthly ENVI: drought part = that month's forecast score ÷ 3 (not affected 0, dry "
                               "condition 1, dry spell 2, drought 3); damage and standing crops as in the season ENVI."},
     })
+    ex = meta["exposure"]
+    payload["exposure"] = {"hvc": ex["hvc"], "livestock": ex["livestock"], "livestock_share": ex["livestock_share"],
+                           "crops_as_of": s.get("crops_as_of"), "livestock_as_of": ex.get("livestock_as_of"),
+                           "hvc_summary": ex.get("hvc_summary"), "livestock_summary": ex.get("livestock_summary")}
     payload["texts"] = common.base_texts(payload, {**settings, "recommendations": recs})
     payload["texts"]["legend_title"] = "Vulnerability class (ENVI)"
     payload["recommendations_source"] = "edited" if settings.get("recommendations") else "auto"
@@ -120,7 +131,7 @@ def monthly_layers(df: pd.DataFrame, t: pd.DataFrame, meta: dict, s: dict, resul
         for i, c in enumerate(legend["classes"]):
             c["lo"], c["hi"] = round(float(br[i]), 4), round(float(br[i + 1]), 4)
         extra = {c: f[c] for c in ["rank", "hazard_raw", "hazard_norm", "damage_norm", "crops_norm"]}
-        extra.update({c: t[c] for c in ["damage_raw", "crops_raw"]})
+        extra.update({c: t[c] for c in ["damage_raw", "crops_raw", "livestock_raw"] if c in t})
         if f"cat_{name}" in t:
             extra["drought_category"] = t[f"cat_{name}"]
         label = pd.Period(yms[name], "M").strftime("%B %Y")
@@ -139,6 +150,5 @@ def crop_table(payload: dict) -> dict[str, dict[str, float]]:
     """{area_key: {crop: ha}} from an ENVI payload – feeds the dashboard's crops overlay."""
     out = {}
     for k, v in payload["layers"][0]["values"].items():
-        out[k] = {c[5:].replace("_total", "").replace("_", " ").title(): v[c] for c in v if c.startswith("crop_")
-                  and v[c] is not None}
+        out[k] = {index.crop_label(c): v[c] for c in v if c.startswith("crop_") and v[c] is not None}
     return out

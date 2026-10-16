@@ -50,6 +50,20 @@ until DA-RFO-CAR confirms them), and the milestone plan with its current status.
 - **Rendering.**
   - ENVI runs the prototype pipeline unchanged. That pipeline uses PyQGIS with the `.qgz` layout when QGIS is
     present (it is in the Docker image) and falls back to matplotlib otherwise.
+- **ENVI exposure inputs** (`worker/agriclimate/envi/exposure.py`). Two optional uploads besides the three
+  prototype inputs:
+  - `hvc` – the HVCDP Regional Summary (one row per planting). The HVC standing area is computed **as of the
+    standing-crops date** (`crops_as_of`) from DATE PLANTED and TARGET MONTH OF HARVEST (multi-harvest crops +63 days,
+    tree crops always standing) and added to the rice + corn hectares (`crop_hvc`). The workbook's crop-stage
+    columns are `TODAY()` formulas and are ignored. The report also gives the HVC area in the field per outlook month.
+    The browser (`web/lib/hvcSlim.ts`) reduces the >5 MB workbook to the needed columns as a `.csv.gz` before upload
+    (4 MB request limit); the worker reads `.xlsx`, `.csv` and `.csv.gz` the same way.
+  - `livestock` – heads per municipality (DA inventory form or template) → Tropical Livestock Units (FAO factors).
+  - `index.compute_envi` keeps three weighted indicators. With livestock, the third becomes
+    `crops_norm = (1 − s) · minmax(crop ha) + s · minmax(TLU)` (`livestock_share` s, default 0.25); hectares and
+    heads are never added. Without livestock it is `minmax(crop ha)`, as in the prototype. The Computation sheet of
+    the Excel reproduces this with live formulas.
+  - Damage and livestock files are reused from the latest ENVI issue when none is uploaded (`lib/server/reuse.ts`).
   - Rainfall and drought maps use a matplotlib renderer that reproduces the DA layout: title box, logos,
     legend with unit, north arrow, scale bar, graticule, CRS note, notes, disclaimer, sources and issuing office.
   - Labels use the prototype's collision-free engine. Every export is re-measured at 400 dpi and a label
@@ -117,6 +131,7 @@ Screenshots are in [`docs/img/`](img/).
 | Official class breaks and colours for rainfall maps | The brief's defaults (dekad 0–10…>200 mm; monthly 0–50…>500 mm). Colours: brown → green → blue, colour-blind safe. Breaks are lower-inclusive. % of normal: ≤ 40 / 41–80 / 81–120 / > 120 (PAGASA wording, to be verified). | Edit `worker/agriclimate/classes.py` presets (or the `legends` table). Per-product overrides already pass through `settings.legend(s)`. |
 | Irrigation / dams dataset (NIA, BSWM, LGU), service areas | CSV/XLSX (lat/lon) or GeoJSON upload. Types are free codes (known: NIS/CIS/SWIP/SSIP/DAM/RIVER/OTHER; new ones get a colour and legend entry from the data, optional TYPE_LABEL names them). Service-area polygons are matched by name. The demo records are **synthetic**. | Map the real dataset's columns in `reference_layers.py` if they differ. |
 | Crops beyond rice and corn; update frequency | Every crop column in the standing-crops upload becomes an overlay choice. Each upload is stored per "as of" date; the latest is shown. | Nothing, unless a per-date picker is wanted on the dashboard. |
+| HVC and livestock in the ENVI | **Added:** HVC standing area computed from the HVCDP Regional Summary for the rice/corn date; livestock (quarterly inventory) as TLU, combined with the crop area after normalization (75 % / 25 % by default, editable per issue). HVCDP's file covers the plantings it monitors (Abra missing in the 2025–2026 sample) and does not list older plantations. | Set the livestock share DA-RFO-CAR adopts; add HVCDP's dry-season planting targets as a further input if the monthly ENVI should follow the HVC area in the field each month. |
 | Hosting | Vercel (web) + Supabase (DB/Auth/Storage) + a container host for the worker (Cloud Run / Render / Fly / VPS). | If only a VPS is available, run both the web app (`next start`) and the worker there. |
 | Domain and email provider for logins | Supabase Auth email + password (magic links work through Supabase too); Supabase's SMTP for invites. | Configure custom SMTP and the domain in Supabase. |
 | Who approves publication; two-step review | Two-step: editors create drafts, edit and export; **only admins publish**. Every step is in the audit log. | Make publishing an editor right if a single step is preferred (`requireRole("admin")` in the publish route). |
@@ -128,7 +143,7 @@ Screenshots are in [`docs/img/`](img/).
 |---|---|---|
 | 1 | Architecture, schema, wireframes, answers to §12 | **Done**: this document, migration, screenshots. |
 | 2 | Gazetteer, boundaries, auth and roles, data model | **Done**: gazetteer with PSGC (77/77), simplified boundaries (162 KB), Supabase schema + RLS (checked on Postgres 17 without PostGIS), local dev auth, role checks and CSRF checks. The full schema and seed run on the local PostgreSQL 17 + PostGIS 3.6 database, and all end-to-end tests pass on it. Supabase-specific code (Auth, Storage, PostgREST) is written but **not yet run against a live project**. |
-| 3 | ENVI port, end to end | **Done**: reproduces the prototype exactly with equal weights (Tabuk City 0.806 Very High; 14/44/11/7/1), through the portal too. Default weights are now drought 50 % / damage 25 % / crops 25 % (DA-RFO-CAR). |
+| 3 | ENVI port, end to end | **Done**: reproduces the prototype exactly with equal weights (Tabuk City 0.806 Very High; 14/44/11/7/1), through the portal too. Default weights are now drought 70 % / damage 15 % / exposure 15 % (DA-RFO-CAR, October 2026; previously 50 / 25 / 25). |
 | 4 | 10-day and seasonal rainfall | **Done**: upload + validation + preview + exports + publish, plus the live 10-day feed and daily cron. |
 | 5 | Drought product | **Done.** Manual upload, or fetched from PAGASA DroughtCaster (§12). |
 | 6 | Public dashboard | **Done**: map types, periods/archive, month player, crops and irrigation overlays, popups, downloads, share links, CAR mask/outline, collision-free labels, mobile bottom sheet. Compare mode (optional) is not built. |

@@ -13,9 +13,12 @@ const ENVI_ROWS: [string, string, (v: number) => string][] = [
   ["hazard_raw", "Drought forecast score", (v) => fmtNumber(v, 0)],
   ["damage_raw", "Historical damage (mean)", (v) => `${fmtNumber(v)} ha/yr`],
   ["crops_raw", "Standing crops", (v) => `${fmtNumber(v)} ha`],
+  ["crop_hvc", "  of which high-value crops", (v) => `${fmtNumber(v)} ha`],
+  ["livestock_heads", "Livestock & poultry", (v) => `${fmtNumber(v, 0)} heads`],
+  ["livestock_raw", "Livestock units", (v) => `${fmtNumber(v, 0)} TLU`],
   ["hazard_norm", "Drought (normalized)", (v) => v.toFixed(2)],
   ["damage_norm", "Damage (normalized)", (v) => v.toFixed(2)],
-  ["crops_norm", "Crops (normalized)", (v) => v.toFixed(2)],
+  ["crops_norm", "Crops / exposure (normalized)", (v) => v.toFixed(2)],
 ];
 
 /** "October 5" → "Oct 5", "November 2026" → "Nov 2026", other labels unchanged. */

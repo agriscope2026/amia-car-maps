@@ -25,13 +25,13 @@ describe("ENVI parts", () => {
   });
 
   it("falls back to the default weights and needs all three indicators", () => {
-    expect(enviParts(v, null)![0].weight).toBe(0.5);
+    expect(enviParts(v, null)![0].weight).toBe(0.7);
     expect(enviParts({ ...v, crops_norm: null }, null)).toBeNull();
   });
 
   it("explains the class with the biggest factor first", () => {
     const s = enviSentence("Tabuk", "High", 0.65, enviParts(v, null)!);
-    expect(s).toBe("Tabuk is High (ENVI 0.65) mainly because of its drought forecast (62% of the score), then standing crops (23%) and past El Niño damage (15%).");
+    expect(s).toBe("Tabuk is High (ENVI 0.65) mainly because of its drought forecast (79% of the score), then standing crops (13%) and past El Niño damage (8%).");
   });
 });
 

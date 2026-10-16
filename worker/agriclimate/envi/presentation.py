@@ -31,6 +31,18 @@ _FONT_FILES = {
 }
 
 
+def _exposure_text(meta: dict, lab: dict) -> str:
+    """What the third indicator measures: rice + corn (+ HVC) area, plus livestock when uploaded."""
+    ex = meta.get("exposure") or {}
+    crops = "rice + corn" + (" + high-value crops" if ex.get("hvc") else "")
+    text = f"{crops} standing area (ha) as of {lab['crops_as_of']}"
+    if ex.get("livestock"):
+        share = ex.get("livestock_share", 0)
+        text += (f", combined with livestock & poultry (TLU, as of {lab.get('livestock_as_of') or 'the inventory date'}"
+                 f"): {1 - share:.0%} crop area, {share:.0%} livestock, each min–max normalized")
+    return text + "."
+
+
 def font(style: str, size: float) -> ImageFont.FreeTypeFont:
     for name in _FONT_FILES[style]:
         for d in _FONT_DIRS:
@@ -144,12 +156,15 @@ def _content(meta: dict) -> dict:
         hazard = (f"PAGASA monthly outlook for {lab['period']}, by province. Not affected = 0, dry condition = 1, "
                   f"dry spell = 2, drought = 3, summed over the {n_months} months.")
     when = f"{month} forecast  ·  season {lab['period']}" if month else f"Season outlook: {lab['period']}"
+    ex = meta.get("exposure") or {}
+    third = "crops & livestock exposure" if ex.get("livestock") else "standing crops"
+    crops = "rice, corn and high-value crop" if ex.get("hvc") else "rice and corn"
     return {
         "title": (f"El Niño Vulnerability Index (ENVI) – {month} – CAR" if month
                   else "El Niño Vulnerability Index (ENVI) – Cordillera Administrative Region"),
-        "subtitle": f"{when}  ·  as of {lab['issued']}  ·  drought forecast + historical El Niño damage + standing crops",
+        "subtitle": f"{when}  ·  as of {lab['issued']}  ·  drought forecast + historical El Niño damage + {third}",
         "overview": (f"This map combines the drought hazard forecast, historical El Niño crop damage and the standing "
-                     f"rice and corn area of CAR's {meta['n_areas']} {level} into one index. It is meant to guide "
+                     f"{crops} area{' and livestock' if ex.get('livestock') else ''} of CAR's {meta['n_areas']} {level} into one index. It is meant to guide "
                      "mitigation, pre-positioning of resources and emergency response during the El Niño dry spell."),
         "method": ((f"The {month} drought score is divided by 3; historical damage and standing crops are rescaled "
                     "to 0–1 with min–max normalization, x′ = (x − min) / (max − min). Higher always means more "
@@ -161,16 +176,18 @@ def _content(meta: dict) -> dict:
             (f"Drought forecast ({pct['hazard']}):", hazard),
             (f"Historical damage ({pct['damage']}):",
              f"mean area damaged (ha) in past El Niño / drought events{years_txt}."),
-            (f"Standing crops ({pct['crops']}):",
-             f"rice + corn standing area (ha) as of {lab['crops_as_of']}."),
+            (f"{meta.get('crops_label', 'Standing crops')} ({pct['crops']}):", _exposure_text(meta, lab)),
         ],
-        "footnote": (f"Indicators: drought forecast, historical El Niño damage, standing crops  ·  "
+        "footnote": (f"Indicators: drought forecast, historical El Niño damage, {third}  ·  "
                      + ("Drought ÷ 3, damage and crops min–max (0–1)" if month else "Min–max normalization (0–1)")
                      + f"  ·  Weights: {pct['hazard']} / {pct['damage']} / {pct['crops']}  ·  "
                      + (f"Month: {month}  ·  " if month else "") + f"Period: {lab['period']}  ·  Issued: {lab['issued']}"),
         "sources": (f"Data sources: DOST-PAGASA drought forecast ({lab['period']}); DA-RFO-CAR historical El Niño "
-                    f"damage logs{years_txt}; DA-RFO-CAR standing crops inventory as of {lab['crops_as_of']}. "
-                    "Map: DA-RFO-CAR AMIA."),
+                    f"damage logs{years_txt}; DA-RFO-CAR standing crops inventory as of {lab['crops_as_of']}"
+                    + ("; HVCDP Regional Summary" if (meta.get("exposure") or {}).get("hvc") else "")
+                    + (f"; livestock & poultry inventory as of {lab.get('livestock_as_of')}"
+                       if (meta.get("exposure") or {}).get("livestock") else "")
+                    + ". Map: DA-RFO-CAR AMIA."),
     }
 
 
@@ -358,11 +375,31 @@ def _hotspots(cv: Canvas, x, y, w, y_max, meta, size=15.5):
     return y
 
 
+def _livestock_line(cv: Canvas, s: dict, maxw: float, size: float) -> tuple[str, str] | None:
+    """('Livestock 36,416 TLU · 32% of 114,655 TLU', 'Swine (hi-breed) 120,431 · Cattle 30,112 …') when the issue has
+    a livestock inventory; species are dropped from the end until the line fits ``maxw``."""
+    if "livestock_at_risk_tlu" not in s:
+        return None
+    tlu, total = s["livestock_at_risk_tlu"], s.get("livestock_total_tlu") or 0
+    share = tlu / total * 100 if total else 0
+    head = f"Livestock {tlu:,.0f} TLU  ·  {share:.0f}% of {total:,.0f} TLU"
+    animals: dict[str, int] = {}      # breeds merged per animal: "Swine (hi-breed)" + "Swine (native)" → "Swine"
+    for k, v in (s.get("livestock_at_risk_heads") or {}).items():
+        a = k.split(" (")[0]
+        animals[a] = animals.get(a, 0) + v
+    items = [f"{k} {v:,}" for k, v in animals.items()]
+    while items and cv.width("  ·  ".join(items) + " head", "regular", size) > maxw:
+        items.pop()
+    return head, ("  ·  ".join(items) + " head") if items else ""
+
+
 def _at_risk(cv: Canvas, x, y, w, meta, size=17):
     s = meta["summary"]
-    h = 116
+    lv = _livestock_line(cv, s, w - 44, size - 2)
+    h = 116 + (56 if lv else 0)
     cv.rrect(x, y, w, h, LIGHT, r=14, outline=(205, 220, 208), width=1.5)
-    cv.text(x + 22, y + 16, "Standing crop area at risk (High + Very High)", "semibold", size - 1, MUTED)
+    cv.text(x + 22, y + 16, "Crops and livestock at risk (High + Very High)" if lv else
+            "Standing crop area at risk (High + Very High)", "semibold", size - 1, MUTED)
     cv.text(x + 22, y + 44, _fmt_ha(s["crop_at_risk_ha"]), "bold", size * 2.1, (200, 50, 40))
     share = s["crop_at_risk_ha"] / s["crop_total_ha"] * 100 if s["crop_total_ha"] else 0
     by = "  ·  ".join(f"{k} {_fmt_ha(v)}" for k, v in s["crop_at_risk_by_crop"].items())
@@ -370,6 +407,11 @@ def _at_risk(cv: Canvas, x, y, w, meta, size=17):
     cv.text(vx, y + 50, f"{share:.0f}% of {_fmt_ha(s['crop_total_ha'])} in {s['n_at_risk']} areas", "regular",
             size - 2, INK)
     cv.text(vx, y + 76, by, "regular", size - 2, MUTED)
+    if lv:
+        cv.d.line([((x + 22) * cv.s, (y + 108) * cv.s), ((x + w - 22) * cv.s, (y + 108) * cv.s)],
+                  fill=(205, 220, 208), width=max(1, int(cv.s)))
+        cv.text(x + 22, y + 118, lv[0], "semibold", size - 2, INK)
+        cv.text(x + 22, y + 142, lv[1], "regular", size - 2, MUTED)
     return y + h
 
 
@@ -452,7 +494,8 @@ def build_slide(meta: dict, map_png: Path, out: Path, scale: float = 1.0, recomm
     fy = H - 58
     cv.d.line([(28 * scale, fy * scale), ((W - 28) * scale, fy * scale)], fill=(205, 212, 206), width=max(1, int(scale)))
     cv.text(W / 2, fy + 17, c["footnote"], "semibold", 14.5, GREEN_DARK, anchor="mm")
-    cv.text(W / 2, fy + 39, c["sources"], "italic", 12.5, MUTED, anchor="mm")
+    src_size = min(12.5, 12.5 * (W - 60) / max(cv.width(c["sources"], "italic", 12.5), 1))   # one line, fitted
+    cv.text(W / 2, fy + 39, c["sources"], "italic", src_size, MUTED, anchor="mm")
     out.parent.mkdir(parents=True, exist_ok=True)
     cv.img.save(out, dpi=(96 * scale, 96 * scale))
     return out
@@ -493,12 +536,12 @@ def build_poster(meta: dict, map_png: Path, out: Path, recommendations: str = ""
     for head, body in c["indicators"]:
         yy = cv.rich_bullet(mx, yy, head, body, W / 2 - 64, size=15) + 2
     yy += 10
-    if not recs:
-        cv.para(mx, yy, c["overview"], W / 2 - 64, size=14, fill=MUTED, style="italic")
-
     foot = cv.wrap(c["footnote"], "semibold", 14, W - 60)
     srcs = cv.wrap(c["sources"], "italic", 12, W - 60)
     fy = H - 18 - (12 + 21 * len(foot) + 18 * len(srcs))    # footer sized to its wrapped lines
+    # overview under the methodology only when it fits above the footer
+    if not recs and yy + len(cv.wrap(c["overview"], "italic", 14, W / 2 - 64)) * 20 < fy - 10:
+        cv.para(mx, yy, c["overview"], W / 2 - 64, size=14, fill=MUTED, style="italic")
     if recs:
         ry = max(yy, top10_end) + 14
         cv.rrect(24, ry, W - 48, fy - ry - 14, LIGHT, r=14, outline=(205, 220, 208), width=1.5)
@@ -518,14 +561,21 @@ def build_poster(meta: dict, map_png: Path, out: Path, recommendations: str = ""
 
 def _at_risk_compact(cv: Canvas, x, y, w, meta):
     s = meta["summary"]
-    h = 150
+    lv = _livestock_line(cv, s, w - 40, 14)
+    h = 172 + (52 if lv else 0)
     cv.rrect(x, y, w, h, LIGHT, r=14, outline=(205, 220, 208), width=1.5)
-    cv.text(x + 20, y + 16, "Standing crop area at risk", "semibold", 16, MUTED)
+    cv.text(x + 20, y + 16, "Crops and livestock at risk" if lv else "Standing crop area at risk", "semibold", 16,
+            MUTED)
     cv.text(x + 20, y + 38, "(High + Very High classes)", "regular", 14, MUTED)
     cv.text(x + 20, y + 64, _fmt_ha(s["crop_at_risk_ha"]), "bold", 34, (200, 50, 40))
     share = s["crop_at_risk_ha"] / s["crop_total_ha"] * 100 if s["crop_total_ha"] else 0
     by = "  ·  ".join(f"{k} {_fmt_ha(v)}" for k, v in s["crop_at_risk_by_crop"].items())
-    cv.text(x + 20, y + 112, f"{share:.0f}% of total, {s['n_at_risk']} areas  ·  {by}", "regular", 14, INK)
+    cv.text(x + 20, y + 112, f"{share:.0f}% of {_fmt_ha(s['crop_total_ha'])} in {s['n_at_risk']} areas", "regular",
+            14, INK)
+    cv.text(x + 20, y + 134, by, "regular", 14, MUTED)
+    if lv:
+        cv.text(x + 20, y + 168, lv[0], "semibold", 14, INK)
+        cv.text(x + 20, y + 192, lv[1], "regular", 14, MUTED)
     return y + h
 
 

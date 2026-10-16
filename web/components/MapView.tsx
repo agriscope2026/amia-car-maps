@@ -38,9 +38,11 @@ const ENVI_FIELDS: [string, string, (v: number) => string][] = [
   ["hazard_raw", "Drought forecast score", (v) => fmtNumber(v, 0)],
   ["damage_raw", "Historical damage (mean, ha/yr)", (v) => `${fmtNumber(v)} ha`],
   ["crops_raw", "Standing crops", (v) => `${fmtNumber(v)} ha`],
+  ["crop_hvc", "of which high-value crops", (v) => `${fmtNumber(v)} ha`],
+  ["livestock_raw", "Livestock units", (v) => `${fmtNumber(v, 0)} TLU`],
   ["hazard_norm", "Drought (normalized)", (v) => v.toFixed(2)],
   ["damage_norm", "Damage (normalized)", (v) => v.toFixed(2)],
-  ["crops_norm", "Crops (normalized)", (v) => v.toFixed(2)],
+  ["crops_norm", "Crops / exposure (normalized)", (v) => v.toFixed(2)],
 ];
 
 export interface MapViewProps {

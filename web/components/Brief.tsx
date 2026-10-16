@@ -16,7 +16,9 @@ const MIN_ZOOM = 0.75;
 const ENVI_ROWS: [string, string, (v: number) => string][] = [
   ["hazard_raw", "Drought forecast score", (v) => fmtNumber(v, 0)],
   ["damage_raw", "Past El Niño damage (mean)", (v) => `${fmtNumber(v)} ha/yr`],
-  ["crops_raw", "Standing crops (rice + corn)", (v) => `${fmtNumber(v)} ha`],
+  ["crops_raw", "Standing crops", (v) => `${fmtNumber(v)} ha`],
+  ["crop_hvc", "of which high-value crops", (v) => `${fmtNumber(v)} ha`],
+  ["livestock_heads", "Livestock & poultry", (v) => `${fmtNumber(v, 0)} heads`],
   ["rank", "Rank in CAR (1 = most vulnerable)", (v) => `#${v} of 77`],
 ];
 

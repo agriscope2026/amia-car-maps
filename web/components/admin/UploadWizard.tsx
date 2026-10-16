@@ -3,16 +3,28 @@
 import dynamic from "next/dynamic";
 import { useEffect, useMemo, useState } from "react";
 import { api } from "@/lib/client";
-import { PRODUCT_TYPES, type Gazetteer, type Payload, type ProductType } from "@/lib/types";
+import { slimHvcFile } from "@/lib/hvcSlim";
+import { PRODUCT_TYPES, type Gazetteer, type HvcSummary, type Payload, type ProductType } from "@/lib/types";
 import { Legend } from "@/components/Legend";
 
 const MapView = dynamic(() => import("@/components/MapView"), { ssr: false });
 
-const INPUTS: Record<ProductType, { field: string; label: string; template: string }[]> = {
+const INPUTS: Record<ProductType, { field: string; label: string; template?: string; help?: string }[]> = {
   envi: [
     { field: "drought", label: "Drought forecast per province (CSV)", template: "envi_drought" },
     { field: "damage", label: "Historical El Niño damage per municipality (ha)", template: "envi_damage" },
-    { field: "crops", label: "Standing crops per municipality (ha)", template: "envi_crops" },
+    { field: "crops", label: "Standing rice and corn per municipality (ha)", template: "envi_crops" },
+    {
+      field: "hvc",
+      label: "High-value crops – HVCDP Regional Summary (optional)",
+      help: "The workbook exactly as HVCDP sends it. The HVC standing area is computed for the “standing crops as of” date from the planting and target-harvest dates; only the needed columns are uploaded.",
+    },
+    {
+      field: "livestock",
+      label: "Livestock & poultry inventory – heads per municipality (optional)",
+      template: "livestock",
+      help: "The DA inventory form or the template. Heads are converted to livestock units (TLU) and combined with the crop area into the exposure indicator.",
+    },
   ],
   rainfall_dekad: [{ field: "file", label: "10-day rainfall per municipality (mm)", template: "rainfall_dekad" }],
   rainfall_seasonal: [{ field: "file", label: "Monthly rainfall per municipality (mm)", template: "rainfall_seasonal" }],
@@ -21,12 +33,62 @@ const INPUTS: Record<ProductType, { field: string; label: string; template: stri
 
 const STEPS = ["Period", "Upload", "Validation", "Preview", "Save draft"];
 
+const DATASET_LABELS: Record<string, string> = {
+  drought: "Drought forecast", damage: "Historical damage", crops: "Standing rice and corn",
+  hvc: "High-value crops (HVCDP)", livestock: "Livestock & poultry",
+};
+
+const iso = (d: Date) => d.toISOString().slice(0, 10);
+/** Last day of the month before `d` – the usual standing-crops cutoff of a monthly issue. */
+const endOfPreviousMonth = (d: Date) => iso(new Date(Date.UTC(d.getFullYear(), d.getMonth(), 0)));
+/** Last day of the latest quarter that has ended – the usual livestock inventory date. */
+const endOfLastQuarter = (d: Date) => iso(new Date(Date.UTC(d.getFullYear(), Math.floor(d.getMonth() / 3) * 3, 0)));
+
+/** HVC standing area and the area still in the field in each outlook month (El Niño timing). */
+function HvcTable({ s }: { s: HvcSummary }) {
+  const ha = (v: number) => `${Math.round(v).toLocaleString()} ha`;
+  return (
+    <div className="table-scroll" style={{ marginTop: 6 }}>
+      <p className="small">
+        <strong>{ha(s.standing_ha)}</strong> of HVC standing on {s.as_of}: {ha(s.short_cycle_ha)} short-cycle (vegetables, root
+        crops, spices, cut flowers) + {ha(s.perennial_ha)} tree / plantation crops. {s.n_records.toLocaleString()} planting records,{" "}
+        {s.first_planting} – {s.last_planting}.
+      </p>
+      <table className="data">
+        <thead>
+          <tr>
+            <th>Outlook month</th>
+            <th>Short-cycle HVC in the field</th>
+            <th>Due for harvest that month</th>
+            <th>Tree / plantation crops</th>
+          </tr>
+        </thead>
+        <tbody>
+          {s.outlook.map((o) => (
+            <tr key={o.month}>
+              <td>{o.label}</td>
+              <td>{ha(o.short_cycle_ha)}</td>
+              <td>{ha(o.harvest_due_ha)}</td>
+              <td>{ha(o.perennial_ha)}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      <p className="small muted">
+        By province: {Object.entries(s.by_province).map(([p, v]) => `${p} ${ha(v)}`).join(" · ")}. By group:{" "}
+        {Object.entries(s.by_group).map(([g, v]) => `${g} ${ha(v)}`).join(" · ")}.
+      </p>
+    </div>
+  );
+}
+
 interface Preview {
   payload: Payload;
   uploadId: string;
   files: any[];
   sig: string | null;
-  reused?: { damage?: { filename: string; issue: string } } | null; // ENVI: historical damage taken from an earlier issue
+  // ENVI: historical damage / livestock taken from an earlier issue
+  reused?: Record<string, { filename: string; issue: string; as_of?: string | null }> | null;
 }
 
 function reportsOf(type: ProductType, payload: Payload | null): [string, any][] {
@@ -93,8 +155,12 @@ export default function UploadWizard({ type, geo }: { type: ProductType; geo: Ga
     period_end: type === "rainfall_dekad" ? "" : "2027-03",
     source: "",
     max_warn_mm: type === "rainfall_dekad" ? 500 : undefined,
-    weights: type === "envi" ? { hazard: 0.5, damage: 0.25, crops: 0.25 } : undefined, // drought 50 %, damage 25 %, crops 25 %
+    weights: type === "envi" ? { hazard: 0.7, damage: 0.15, crops: 0.15 } : undefined, // drought 70 %, damage 15 %, exposure 15 %
     classification: type === "envi" ? "equal" : undefined,
+    // ENVI exposure: rice/corn (and HVC) standing date, livestock inventory date, livestock share of exposure
+    crops_as_of: type === "envi" ? endOfPreviousMonth(new Date()) : undefined,
+    livestock_as_of: type === "envi" ? "" : undefined,
+    livestock_share: type === "envi" ? 0.25 : undefined,
     manual_matches: {},
   }));
   const [files, setFiles] = useState<Record<string, File>>({});
@@ -145,14 +211,38 @@ export default function UploadWizard({ type, geo }: { type: ProductType; geo: Ga
     }
   };
 
-  // ENVI monthly update: the historical damage file the server reuses when none is uploaded
-  const [reuse, setReuse] = useState<{ filename: string; issue: string; status: string } | null | undefined>(undefined);
+  // ENVI monthly update: the historical damage / livestock files the server reuses when none is uploaded
+  type ReuseInfo = { filename: string; issue: string; status: string; as_of: string | null } | null;
+  const [reuseAll, setReuseAll] = useState<{ damage: ReuseInfo; livestock: ReuseInfo } | undefined>(undefined);
+  const reuse = reuseAll === undefined ? undefined : reuseAll.damage;
+  const [useLivestock, setUseLivestock] = useState(true);
   useEffect(() => {
     if (type !== "envi") return;
-    api<{ damage: { filename: string; issue: string; status: string } | null }>("/api/admin/reuse")
-      .then((r) => setReuse(r.damage))
-      .catch(() => setReuse(null));
+    api<{ damage: ReuseInfo; livestock: ReuseInfo }>("/api/admin/reuse")
+      .then((r) => {
+        setReuseAll(r);
+        // a reused livestock inventory keeps the date it was entered with
+        if (r.livestock?.as_of) setSettings((s) => ({ ...s, livestock_as_of: s.livestock_as_of || r.livestock!.as_of }));
+      })
+      .catch(() => setReuseAll({ damage: null, livestock: null }));
   }, [type]);
+  // HVCDP workbook reduced in the browser to the columns the ENVI needs
+  const [hvcNote, setHvcNote] = useState<string | null>(null);
+  const pickHvc = async (f: File) => {
+    setBusy(true);
+    setError(null);
+    setHvcNote(null);
+    try {
+      const r = await slimHvcFile(f);
+      setFiles((fs) => ({ ...fs, hvc: r.file }));
+      setHvcNote(r.note);
+    } catch (e) {
+      if (f.size <= 4 * 1024 * 1024) setFiles((fs) => ({ ...fs, hvc: f }));
+      setError(`HVCDP file: ${(e as Error).message}`);
+    } finally {
+      setBusy(false);
+    }
+  };
 
   // a feed fetch from the admin home arrives through sessionStorage
   useEffect(() => {
@@ -181,6 +271,7 @@ export default function UploadWizard({ type, geo }: { type: ProductType; geo: Ga
       form.set("settings", JSON.stringify(s));
       if (preview?.uploadId) form.set("uploadId", preview.uploadId);
       for (const [k, f] of Object.entries(files)) form.set(k, f, f.name);
+      if (type === "envi" && !useLivestock) form.set("reuse_livestock", "0");
       const res = await api<Preview>(`/api/admin/preview/${type}`, { method: "POST", body: form });
       setSettings(s);
       setPreview(res);
@@ -300,7 +391,9 @@ export default function UploadWizard({ type, geo }: { type: ProductType; geo: Ga
           <div className="form-grid" style={{ marginTop: 12 }}>
             {(["hazard", "damage", "crops"] as const).map((k) => (
               <div className="field" key={k}>
-                <label htmlFor={`w-${k}`}>Weight – {k === "hazard" ? "drought forecast" : k === "damage" ? "historical damage" : "standing crops"}</label>
+                <label htmlFor={`w-${k}`}>
+                  Weight – {k === "hazard" ? "drought forecast" : k === "damage" ? "historical damage" : "exposure (crops + livestock)"}
+                </label>
                 <input
                   id={`w-${k}`}
                   type="number"
@@ -353,6 +446,11 @@ export default function UploadWizard({ type, geo }: { type: ProductType; geo: Ga
                 accept=".csv,.xlsx,.xls"
                 onChange={(e) => {
                   const f = e.target.files?.[0];
+                  setPreview(null);
+                  if (inp.field === "hvc") {
+                    if (f) return void pickHvc(f);
+                    setHvcNote(null);
+                  }
                   setFiles((fs) => {
                     const n = { ...fs };
                     if (f) n[inp.field] = f;
@@ -361,7 +459,7 @@ export default function UploadWizard({ type, geo }: { type: ProductType; geo: Ga
                   });
                 }}
               />
-              <a href={templateUrl(inp.template)}>Download template</a>
+              {inp.template && <a href={templateUrl(inp.template)}>Download template</a>}
               {inp.field === droughtField && (
                 <button type="button" className="btn secondary" disabled={busy} onClick={fetchDroughtcaster}>
                   {busy ? "Fetching…" : "Fetch from PAGASA DroughtCaster"}
@@ -370,6 +468,58 @@ export default function UploadWizard({ type, geo }: { type: ProductType; geo: Ga
             </div>
             {inp.field === droughtField && files[inp.field] && dcInfo && files[inp.field].name.startsWith("droughtcaster_") && (
               <p className="hint">✓ {dcInfo}</p>
+            )}
+            {inp.help && <p className="help">{inp.help}</p>}
+            {inp.field === "crops" && (
+              <div className="row" style={{ marginTop: 6 }}>
+                <label className="row" htmlFor="crops-as-of">
+                  Standing crops as of{" "}
+                  <input id="crops-as-of" type="date" value={settings.crops_as_of ?? ""} onChange={(e) => set("crops_as_of", e.target.value)} />
+                </label>
+                <span className="small muted">Rice and corn inventory date; the HVC standing area is computed for the same date.</span>
+              </div>
+            )}
+            {inp.field === "hvc" && hvcNote && files.hvc && <p className="hint">✓ {hvcNote}</p>}
+            {inp.field === "livestock" && (files.livestock || (reuseAll?.livestock && useLivestock)) && (
+              <div className="row" style={{ marginTop: 6 }}>
+                <label className="row" htmlFor="lv-as-of">
+                  Inventory as of{" "}
+                  <input id="lv-as-of" type="date" value={settings.livestock_as_of ?? ""} onChange={(e) => set("livestock_as_of", e.target.value)} />
+                </label>
+                {!settings.livestock_as_of && (
+                  <button type="button" className="btn secondary" onClick={() => set("livestock_as_of", endOfLastQuarter(new Date()))}>
+                    End of last quarter
+                  </button>
+                )}
+                <label className="row" htmlFor="lv-share">
+                  Livestock share of exposure{" "}
+                  <input
+                    id="lv-share"
+                    type="number"
+                    step="0.05"
+                    min={0}
+                    max={1}
+                    style={{ width: 80 }}
+                    value={settings.livestock_share}
+                    onChange={(e) => set("livestock_share", Number(e.target.value))}
+                  />
+                </label>
+                <span className="small muted">
+                  Exposure = {(1 - settings.livestock_share).toFixed(2)} × crop area + {Number(settings.livestock_share).toFixed(2)} ×
+                  livestock, each normalized 0–1 (hectares and heads are never added).
+                </span>
+              </div>
+            )}
+            {type === "envi" && inp.field === "livestock" && !files.livestock && reuseAll?.livestock && (
+              <div className="hint">
+                <label className="row">
+                  <input type="checkbox" checked={useLivestock} onChange={(e) => setUseLivestock(e.target.checked)} />
+                  <span>
+                    Reuse <strong>{reuseAll.livestock.filename}</strong> from the {reuseAll.livestock.issue} issue (the inventory is
+                    quarterly). Upload a file only for a new quarter.
+                  </span>
+                </label>
+              </div>
             )}
             {type === "envi" && inp.field === "damage" && !files.damage && reuse !== undefined && (
               <p className={`hint ${reuse ? "" : "warn"}`}>
@@ -386,7 +536,11 @@ export default function UploadWizard({ type, geo }: { type: ProductType; geo: Ga
           </div>
         ))}
         {type === "envi" && (
-          <p className="hint">Monthly update: upload the new drought forecast and the new standing crops; the season ENVI and the monthly maps are recomputed from them.</p>
+          <p className="hint">
+            Monthly update: upload the new drought forecast, the new standing rice and corn and the latest HVCDP Regional Summary; the
+            season ENVI and the monthly maps are recomputed from them. Historical damage and livestock are reused until you upload new
+            files.
+          </p>
         )}
         <button className="btn" disabled={busy || !Object.keys(files).length} onClick={() => validate()}>
           {busy ? "Checking…" : "Validate"}
@@ -400,9 +554,9 @@ export default function UploadWizard({ type, geo }: { type: ProductType; geo: Ga
           {(payload as any)?.pagasa?.table?.length > 0 && <PagasaCheck info={(payload as any).pagasa} />}
           {reportsOf(type, payload).map(([ds, rep]) => (
             <div key={ds} style={{ marginBottom: 14 }}>
-              {type === "envi" && <h3>{ds}</h3>}
-              {ds === "damage" && preview.reused?.damage && (
-                <p className="msg">Reused from the {preview.reused.damage.issue} issue: {preview.reused.damage.filename}</p>
+              {type === "envi" && <h3>{DATASET_LABELS[ds] ?? ds}</h3>}
+              {preview.reused?.[ds] && (
+                <p className="msg">Reused from the {preview.reused[ds].issue} issue: {preview.reused[ds].filename}</p>
               )}
               {rep.n_data_rows !== undefined && (
                 <p className="small muted">
@@ -417,6 +571,16 @@ export default function UploadWizard({ type, geo }: { type: ProductType; geo: Ga
                 <p key={`w${i}`} className="msg warn">{m}</p>
               ))}
               {!(rep.errors ?? []).length && !(rep.warnings ?? []).length && <p className="msg ok">No problems found.</p>}
+              {rep.hvc_summary && <HvcTable s={rep.hvc_summary} />}
+              {rep.livestock_summary && (
+                <p className="small" style={{ marginTop: 6 }}>
+                  {Object.entries(rep.livestock_summary.heads as Record<string, number>)
+                    .filter(([, v]) => v > 0)
+                    .map(([k, v]) => `${k} ${v.toLocaleString()}`)
+                    .join(" · ")}{" "}
+                  → <strong>{Math.round(rep.livestock_summary.tlu_total).toLocaleString()} TLU</strong> (livestock units).
+                </p>
+              )}
               {(rep.unmatched ?? []).length > 0 && (
                 <table className="data">
                   <thead>

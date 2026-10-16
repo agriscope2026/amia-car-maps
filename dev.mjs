@@ -5,6 +5,7 @@
 // Ctrl+C stops the worker and the web app (the database keeps running; stop it with: cd web && npm run db:stop).
 import { spawn, spawnSync } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
+import { createServer } from "node:net";
 import { join } from "node:path";
 
 const ROOT = import.meta.dirname;
@@ -42,6 +43,67 @@ if (env.DATABASE_URL) {
   }
   spawnSync(process.execPath, [join(WEB, "scripts", "localdb.mjs"), "start"], { stdio: "inherit" });
   spawnSync(process.execPath, [join(WEB, "scripts", "localdb.mjs"), "migrate"], { stdio: "inherit" });
+}
+
+// ports 3000 (web) and 8001 (worker) must be free – usually they are held by an earlier `node dev.mjs` that is
+// still running (another terminal, or one closed without Ctrl+C). `node dev.mjs --restart` stops it first.
+const PORTS = { 3000: "web app", 8001: "worker" };
+
+function canListen(port, host) {
+  return new Promise((resolve) => {
+    const srv = createServer()
+      .once("error", (e) => resolve(e.code !== "EADDRINUSE" && e.code !== "EACCES"))
+      .once("listening", () => srv.close(() => resolve(true)))
+      .listen(port, host);
+  });
+}
+
+// the web app listens on all addresses, the worker on 127.0.0.1 only: check both
+const portFree = async (port) => (await canListen(port, "127.0.0.1")) && (await canListen(port, "::"));
+
+/** PIDs listening on a port (Windows: netstat; elsewhere: lsof). */
+function listeners(port) {
+  if (win) {
+    const out = spawnSync("netstat", ["-ano", "-p", "TCP"], { encoding: "utf-8" }).stdout ?? "";
+    return [...new Set(out.split(/\r?\n/).filter((l) => /LISTENING/.test(l) && new RegExp(`:${port}\\s`).test(l))
+      .map((l) => l.trim().split(/\s+/).pop()).filter((p) => p && p !== "0"))];
+  }
+  const out = spawnSync("lsof", ["-ti", `tcp:${port}`, "-sTCP:LISTEN"], { encoding: "utf-8" }).stdout ?? "";
+  return [...new Set(out.split(/\s+/).filter(Boolean))];
+}
+
+function processName(pid) {
+  if (!win) return spawnSync("ps", ["-p", pid, "-o", "comm="], { encoding: "utf-8" }).stdout?.trim() || "?";
+  const out = spawnSync("tasklist", ["/FI", `PID eq ${pid}`, "/FO", "CSV", "/NH"], { encoding: "utf-8" }).stdout ?? "";
+  return out.split(",")[0]?.replace(/"/g, "").trim() || "?";
+}
+
+function stopPid(pid) {
+  if (win) spawnSync("taskkill", ["/PID", pid, "/T", "/F"], { stdio: "ignore" });
+  else spawnSync("kill", [pid], { stdio: "ignore" });
+}
+
+const restart = process.argv.includes("--restart");
+let busy = [];
+for (const port of Object.keys(PORTS)) if (!(await portFree(Number(port)))) busy.push(port);
+if (busy.length && restart) {
+  for (const port of busy) for (const pid of listeners(port)) {
+    console.log(`Stopping ${processName(pid)} (PID ${pid}) on port ${port}…`);
+    stopPid(pid);
+  }
+  await new Promise((r) => setTimeout(r, 1500));
+  busy = [];
+  for (const port of Object.keys(PORTS)) if (!(await portFree(Number(port)))) busy.push(port);
+}
+if (busy.length) {
+  console.error("\nCannot start: these ports are already in use:");
+  for (const port of busy) {
+    const who = listeners(port).map((pid) => `${processName(pid)} PID ${pid}`).join(", ") || "unknown process";
+    console.error(`  ${port} (${PORTS[port]}) – held by ${who}`);
+  }
+  console.error("\nUsually this is an earlier `node dev.mjs` that is still running. Stop it with Ctrl+C in its terminal, or run:");
+  console.error("  node dev.mjs --restart     (stops whatever holds these ports, then starts)\n");
+  process.exit(1);
 }
 
 const children = [];

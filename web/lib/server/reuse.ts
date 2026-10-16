@@ -8,9 +8,10 @@ export interface ReusedInput {
   issue: string; // period label of the issue the file comes from
   issued: string;
   status: string;
+  settings: Record<string, any>; // settings of that issue (e.g. livestock_as_of)
 }
 
-/** The input file of the most recent ENVI issue for one dataset (e.g. historical damage, which changes rarely):
+/** The input file of the most recent ENVI issue for one dataset (historical damage, livestock – they change rarely):
  * published issues first (latest period), then drafts (newest). Null when no ENVI issue has that file. */
 export async function latestEnviInput(field: string): Promise<ReusedInput | null> {
   const withFile = (await listVersions()).filter(
@@ -23,5 +24,5 @@ export async function latestEnviInput(field: string): Promise<ReusedInput | null
   const v = withFile[0];
   if (!v) return null;
   const file = (v.settings.input_files as StoredFile[]).find((f) => f.field === field)!;
-  return { file, version_id: v.id, issue: v.period.label, issued: v.issued, status: v.status };
+  return { file, version_id: v.id, issue: v.period.label, issued: v.issued, status: v.status, settings: v.settings };
 }

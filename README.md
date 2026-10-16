@@ -7,6 +7,8 @@ Administrative Region (DA-RFO-CAR), AMIA Program. It has two parts:
   forecasts (mm) and the drought forecast for the 77 municipalities of CAR. It has crop and irrigation overlays,
   an archive, downloads and share links.
 - **Admin workspace:** upload → validate → preview → edit text → generate print-ready exports → publish.
+  - The ENVI exposure indicator covers rice, corn, high-value crops (computed from the HVCDP Regional Summary for the
+    standing-crops date) and, optionally, livestock & poultry (heads → livestock units, combined after normalization).
   - Exports are the map images (PNG, no PDFs): every rainfall and drought map gets a print-ready PNG (400 dpi), with a
     title page first and a summary page and a recommendations page last, plus one ZIP of all of them. ENVI gets, for the season outlook and each month, a landscape presentation (5760×3240) and a
     portrait A4 poster (450 dpi) as PNG images, plus the computation Excel in the ZIP. Standing crops can be added as proportional circles
@@ -22,6 +24,7 @@ Administrative Region (DA-RFO-CAR), AMIA Program. It has two parts:
 |---|---|
 | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | Architecture, data model, screens, answers to §12, milestone status |
 | [docs/ADMIN_GUIDE.md](docs/ADMIN_GUIDE.md) | Step-by-step guide for editors and administrators |
+| [docs/ENVI_RESEARCH_PAPER.html](docs/ENVI_RESEARCH_PAPER.html) | ENVI technical paper (weights 70/15/15): method, HVC and livestock exposure, Oct 2026 – Mar 2027 results, sensitivity, limitations |
 | [PROMPT_CAR_AgriClimate_Portal.md](PROMPT_CAR_AgriClimate_Portal.md) | The original requirements |
 
 ## Repository layout
@@ -29,7 +32,8 @@ Administrative Region (DA-RFO-CAR), AMIA Program. It has two parts:
 ```
 web/        Next.js 15 + TypeScript + MapLibre GL – dashboard, admin workspace, API routes (deploy: Vercel)
 worker/     Python FastAPI render worker – validation, products, exports (deploy: Docker, python:3.13-slim)
-  agriclimate/envi/     the ENVI prototype (Elnino-vul-index), ported unchanged apart from paths
+  agriclimate/envi/     the ENVI prototype (Elnino-vul-index), ported unchanged apart from paths;
+                        exposure.py adds the HVC (HVCDP Regional Summary) and livestock inputs
   agriclimate/products/ ENVI, 10-day rainfall, seasonal rainfall, drought, crops and irrigation layers
   agriclimate/rainfall_feed.py   10-day rainfall feed (Cordillera weather API)
   agriclimate/pagasa_seasonal.py seasonal rainfall from PAGASA's published tables (CAR rows, OCR)
@@ -37,7 +41,7 @@ worker/     Python FastAPI render worker – validation, products, exports (depl
   data/gis, data/gis_template    CAR boundaries (EPSG:4326) and the DA QGIS print templates
   scripts/              build_reference, build_glyphs, build_seed_sql, build_demo, make_demo_samples
 supabase/   migrations/0001_init.sql (PostGIS schema + RLS + storage buckets), seed.sql
-sample data/sample input/        DA-RFO-CAR sample inputs (ENVI)
+sample data/sample input/        DA-RFO-CAR sample inputs (ENVI, incl. HVCDP Regional Summary and livestock inventory)
 docs/       architecture, admin guide, screenshots
 ```
 

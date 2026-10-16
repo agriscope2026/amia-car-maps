@@ -33,7 +33,21 @@ TEMPLATE_INFO = {
         "Under construction, For rehabilitation, Proposed, Unknown.",
         "Service-area polygons can be uploaded separately as GeoJSON.",
     ]),
+    "livestock": ("livestock_inventory_template.xlsx", [
+        "Livestock and poultry inventory – one row per municipality (all 77 are listed). Keep PSGC, PROVINCE and "
+        "MUNICIPALITY as they are.",
+        "Animal columns: number of heads on hand (whole numbers, ≥ 0). BEES: number of colonies.",
+        "SWINE_HIBREED and SWINE_NATIVE, CHICKEN_COMMERCIAL and CHICKEN_NATIVE are counted separately – do not "
+        "put the same animals in both columns.",
+        "Leave a cell blank if there is no report for that municipality (it counts as 0 and is listed as a warning). "
+        "Do not add province or CAR total rows – totals are computed.",
+        "Enter the “as of” date of the inventory (e.g. end of the quarter, 2026-06-30) when you upload the file in "
+        "the ENVI upload page. The DA inventory form itself (title rows, province subtotal rows) is accepted too.",
+    ]),
 }
+
+LIVESTOCK_COLUMNS = ["CATTLE", "CARABAO", "SHEEP", "GOAT", "SWINE_HIBREED", "SWINE_NATIVE", "HORSE", "RABBIT",
+                     "CHICKEN_COMMERCIAL", "CHICKEN_NATIVE", "DUCK", "GOOSE", "TURKEY", "QUAIL", "BEES"]
 
 
 def _months(period_start: str, period_end: str) -> list[str]:
@@ -85,6 +99,11 @@ def template(kind: str, period_start: str = "2026-10", period_end: str = "2027-0
         df = pd.DataFrame(columns=["NAME", "TYPE", "LAT", "LON", "MUNICIPALITY", "PROVINCE", "RIVER",
                                    "SERVICE_AREA_HA", "STATUS", "SOURCE"])
         return TEMPLATE_INFO[kind][0], _xlsx(df, TEMPLATE_INFO[kind][1])
+    if kind == "livestock":
+        df = _base_rows()
+        for c in LIVESTOCK_COLUMNS:
+            df[c] = None
+        return TEMPLATE_INFO[kind][0], _xlsx(df, TEMPLATE_INFO[kind][1])
     if kind in ("envi_damage", "envi_crops", "envi_drought", "crops"):
         import tempfile
         from pathlib import Path
@@ -95,5 +114,5 @@ def template(kind: str, period_start: str = "2026-10", period_end: str = "2027-0
     raise KeyError(f"Unknown template '{kind}'")
 
 
-TEMPLATE_KINDS = ["rainfall_dekad", "rainfall_seasonal", "drought", "irrigation", "envi_drought", "envi_damage",
-                  "envi_crops"]
+TEMPLATE_KINDS = ["rainfall_dekad", "rainfall_seasonal", "drought", "irrigation", "livestock", "envi_drought",
+                  "envi_damage", "envi_crops"]

@@ -11,7 +11,7 @@ export const ENVI_PARTS = [
   { key: "crops", label: "Standing crops", phrase: "standing crops", color: "#2e7d32" },
 ] as const;
 
-export const DEFAULT_WEIGHTS: Record<string, number> = { hazard: 0.5, damage: 0.25, crops: 0.25 };
+export const DEFAULT_WEIGHTS: Record<string, number> = { hazard: 0.7, damage: 0.15, crops: 0.15 };
 
 export interface EnviPart {
   key: string;
@@ -28,7 +28,10 @@ export interface EnviPart {
 export function enviParts(v: AreaValue | undefined, weights?: Record<string, number> | null): EnviPart[] | null {
   if (!v) return null;
   const w = weights && Object.keys(weights).length ? weights : DEFAULT_WEIGHTS;
-  const parts = ENVI_PARTS.map((p) => {
+  // with a livestock inventory the third indicator is crops & livestock exposure
+  const exposure = typeof v.livestock_norm === "number";
+  const parts = ENVI_PARTS.map((p0) => {
+    const p = exposure && p0.key === "crops" ? { ...p0, label: "Crops & livestock", phrase: "crops and livestock" } : p0;
     const norm = v[`${p.key}_norm`];
     const weight = Number(w[p.key] ?? 0);
     return typeof norm === "number" ? { ...p, norm, weight, value: weight * norm, share: 0 } : null;

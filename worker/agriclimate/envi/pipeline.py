@@ -54,15 +54,17 @@ def methodology_rows(meta: dict, settings: dict, results: dict) -> list[tuple[st
         ("Outlook period", meta["labels"]["period"]),
         ("Issued (as of)", meta["labels"]["issued"]),
         ("Standing crops as of", meta["labels"]["crops_as_of"]),
+        *([("Livestock inventory as of", meta["labels"]["livestock_as_of"])]
+          if meta.get("exposure", {}).get("livestock") else []),
         ("Analysis level", meta["level"]),
         ("Areas", str(meta["n_areas"])),
         ("Areas with no data", str(meta["n_nodata"])),
         ("Normalization", "Min–max: x_norm = (x − min) / (max − min); 0 when max = min. Higher = more vulnerable."),
         ("Drought forecast", meta["hazard_note"] + f" Normalized with: {meta['hazard_method']}."),
         ("Historical damage", meta["damage_note"]),
-        ("Standing crops", meta["crops_note"]),
+        (meta.get("crops_label", "Standing crops"), meta["crops_note"]),
         ("Weights", f"Drought forecast {w['hazard']:.4f}; Historical damage {w['damage']:.4f}; "
-                    f"Standing crops {w['crops']:.4f}"),
+                    f"{meta.get('crops_label', 'Standing crops')} {w['crops']:.4f}"),
         ("ENVI", "Σ weight × normalized indicator"),
         ("Classification", meta["classification"]),
         ("Class breaks", " | ".join(f"{b:.4f}" for b in meta["breaks"])),
@@ -162,6 +164,7 @@ def write_computation_sheet(wb, df: pd.DataFrame, meta: dict, settings: dict, re
     fixed = settings.get("hazard_scaling", "minmax") == "fixed" and rep.get("hazard_type") == "categorical"
     invert = not fixed and rep.get("hazard_direction") == "lower_worse"
     zero_missing = settings.get("missing_policy", "nodata") == "zero"
+    livestock = "livestock_raw" in df and "livestock_norm" in df
 
     ws.write(0, 0, "ENVI computation – live Excel formulas", bold)
     ws.write(1, 0, "Change a weight (yellow) or a raw value and the normalized values, ENVI and class recalculate. "
@@ -172,7 +175,7 @@ def write_computation_sheet(wb, df: pd.DataFrame, meta: dict, settings: dict, re
     last = first + n - 1
     raw_col = {"hazard": 3, "damage": 4, "crops": 5}
     labels = {"hazard": "Drought forecast score", "damage": "Historical damage (ha, mean/yr)",
-              "crops": "Standing crops (ha)"}
+              "crops": "Crop area (ha)" if livestock else "Standing crops (ha)"}
     for i, h in enumerate(["Indicator", "Weight", "Min", "Max", "Normalization"]):
         ws.write(3, i, h, hdr)
     prow = {}
@@ -196,6 +199,15 @@ def write_computation_sheet(wb, df: pd.DataFrame, meta: dict, settings: dict, re
     ws.write(7, 0, "Sum of weights", bold)
     ws.write_formula(7, 1, "=SUM(B5:B7)", n4, float(sum(meta["weights"].values())))
 
+    if livestock:   # exposure = (1 − share) × crop area norm + share × livestock norm (row 10)
+        lv = pd.to_numeric(df["livestock_raw"], errors="coerce")
+        lrng = f"{cell(first, 11, True, False)}:{cell(last, 11, True, False)}"
+        ws.write(9, 0, "Livestock share of exposure")
+        ws.write_number(9, 1, float(meta["exposure"]["livestock_share"]), inp)
+        ws.write_formula(9, 2, f"=MIN({lrng})", n4, float(lv.min()))
+        ws.write_formula(9, 3, f"=MAX({lrng})", n4, float(lv.max()))
+        ws.write(9, 4, "Livestock (TLU) min–max; Exposure = (1 − share) × Crop area_norm + share × Livestock_norm")
+
     br = [float(b) for b in meta["breaks"]]
     ws.write(8, 0, "Class breaks", bold)
     for i, b in enumerate(br):
@@ -204,7 +216,9 @@ def write_computation_sheet(wb, df: pd.DataFrame, meta: dict, settings: dict, re
              else "upper bound included", note)
 
     heads = ["Rank", "Area", "Province", labels["hazard"], labels["damage"], labels["crops"],
-             "Drought (norm)", "Damage (norm)", "Crops (norm)", "ENVI", "Class"]
+             "Drought (norm)", "Damage (norm)", "Exposure (norm)" if livestock else "Crops (norm)", "ENVI", "Class"]
+    if livestock:
+        heads += ["Livestock (TLU)", "Livestock (norm)"]
     hr = first - 1
     for i, h in enumerate(heads):
         ws.write(hr, i, h, hdr)
@@ -230,6 +244,14 @@ def write_computation_sheet(wb, df: pd.DataFrame, meta: dict, settings: dict, re
                 f = f"IF({mx}={mn},0,({mx}-{x})/({mx}-{mn}))"
             else:
                 f = f"IF({mx}={mn},0,({x}-{mn})/({mx}-{mn}))"
+            if k == "crops" and livestock:
+                lx, lmn, lmx = cell(r, 11), "$C$10", "$D$10"
+                lvf = f"IF({lmx}={lmn},0,({lx}-{lmn})/({lmx}-{lmn}))"
+                f = f"(1-$B$10)*{f}+$B$10*{lvf}"
+                if pd.notna(row["livestock_raw"]):
+                    ws.write_number(r, 11, float(row["livestock_raw"]))
+                ws.write_formula(r, 12, f'=IF({lx}="",0,{lvf})', n3, float(row["livestock_norm"])
+                                 if pd.notna(row["livestock_norm"]) else 0.0)
             v = row[f"{k}_norm"]
             ws.write_formula(r, c + 3, f'=IF({x}="",{blank},{f})', n3, "" if pd.isna(v) else float(v))
         g, h, k3, e = cell(r, 6), cell(r, 7), cell(r, 8), cell(r, 9)

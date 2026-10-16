@@ -126,6 +126,18 @@ export default function ReferenceUploads() {
         needsDate
         help="PSGC, AREA (municipality), then one column per crop in hectares – as many crops as you have (Rice, Corn, Coffee, Cabbage, …). Title rows above the header are fine; a plain “Total” column is ignored. Every crop becomes a choice in the dashboard's crop overlay."
       />
+      <section>
+        <h2>Livestock and high-value crops</h2>
+        <p className="muted small">
+          Both are uploaded with each ENVI issue (New → ENVI): the <strong>HVCDP Regional Summary</strong> workbook exactly as HVCDP sends
+          it (the HVC standing area is computed for the standing-crops date), and the <strong>livestock &amp; poultry inventory</strong>{" "}
+          (quarterly, reused until a new one is uploaded). The livestock template is a blank form with every CAR municipality for the
+          provincial coordinators; the DA inventory form is accepted as it is.
+        </p>
+        <div className="row">
+          <a href="/api/templates/livestock">Download livestock template</a>
+        </div>
+      </section>
       <Uploader
         kind="irrigation"
         title="Irrigation sources and dams"

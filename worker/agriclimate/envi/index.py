@@ -12,6 +12,13 @@ from .normalize import fixed_scale, minmax, normalize_hazard
 
 IND_KEYS = ["hazard", "damage", "crops"]
 DATASET_OF = {"hazard": "drought", "damage": "damage", "crops": "crops"}
+CROP_LABELS = {"hvc": "HVC"}
+
+
+def crop_label(col: str) -> str:
+    """'crop_corn_total' → 'Corn', 'crop_hvc' → 'HVC'."""
+    k = col.replace("crop_", "").replace("_total", "")
+    return CROP_LABELS.get(k, k.replace("_", " ").title())
 
 
 # ---------------------------------------------------------------- weights ---
@@ -141,7 +148,7 @@ def compute_envi(results: dict[str, DatasetResult], gaz: Gazetteer, settings: di
 
     Returns (table with one row per GIS area, metadata dict).
     """
-    level = analysis_level(results)
+    level = analysis_level({k: results[k] for k in DATASET_OF.values()})
     weights = validate_weights(settings.get("weights", config.DEFAULT_SETTINGS["weights"]))
     method = settings.get("classification", "equal")
 
@@ -163,7 +170,14 @@ def compute_envi(results: dict[str, DatasetResult], gaz: Gazetteer, settings: di
                                                 settings.get("hazard_scaling", "minmax"))
     df["hazard_norm"] = hazard_norm
     df["damage_norm"] = minmax(df["damage_raw"])
-    df["crops_norm"] = minmax(df["crops_raw"])
+    exposure = _add_exposure(df, base, level, results, settings)
+    df["crops_area_norm"] = minmax(df["crops_raw"])
+    if exposure["livestock"]:
+        share = exposure["livestock_share"]
+        df["livestock_norm"] = minmax(df["livestock_raw"])
+        df["crops_norm"] = (1 - share) * df["crops_area_norm"] + share * df["livestock_norm"]
+    else:
+        df["crops_norm"] = df["crops_area_norm"]
 
     missing = df[[f"{k}_raw" for k in IND_KEYS]].isna()
     df["missing_indicators"] = missing.apply(
@@ -187,7 +201,9 @@ def compute_envi(results: dict[str, DatasetResult], gaz: Gazetteer, settings: di
         "hazard_method": hazard_desc,
         "hazard_note": results["drought"].report.get("hazard_note", ""),
         "damage_note": results["damage"].report.get("damage_note", ""),
-        "crops_note": results["crops"].report.get("crops_note", ""),
+        "crops_note": exposure["note"],
+        "crops_label": exposure["label"],
+        "exposure": exposure,
         "n_areas": int(len(df)),
         "n_nodata": int((df.envi_class == config.NO_DATA_LABEL).sum()),
         "labels": config.period_labels(settings),
@@ -197,6 +213,46 @@ def compute_envi(results: dict[str, DatasetResult], gaz: Gazetteer, settings: di
     }
     meta["summary"] = summarize(df, breaks)
     return df, meta
+
+
+def _by_level(res: DatasetResult, base: pd.DataFrame, level: str) -> pd.DataFrame:
+    """Municipal values of an optional dataset on the analysis areas (summed per province at provincial level)."""
+    data = res.data.select_dtypes("number")
+    if level == "provincial":
+        data = data.groupby(data.index.str.split("|").str[0]).sum(min_count=1)
+    return base[["area_key"]].join(data, on="area_key").drop(columns="area_key")
+
+
+def _add_exposure(df: pd.DataFrame, base: pd.DataFrame, level: str, results: dict, settings: dict) -> dict:
+    """Add HVC (ha, into crops_raw as crop_hvc) and livestock (TLU, livestock_raw) when they were uploaded."""
+    notes = [results["crops"].report.get("crops_note", "")]
+    info = {"hvc": False, "livestock": False, "livestock_share": 0.0}
+    hvc = results.get("hvc")
+    if hvc is not None and hvc.ok and not hvc.data.empty:
+        h = _by_level(hvc, base, level).fillna(0.0)
+        df["crop_hvc"] = h["hvc_ha"].values
+        df["hvc_short_ha"] = h["hvc_short_ha"].values
+        df["hvc_perennial_ha"] = h["hvc_perennial_ha"].values
+        df["crops_raw"] = df["crops_raw"] + df["crop_hvc"]
+        notes.append(hvc.report.get("hvc_note", ""))
+        info.update(hvc=True, hvc_summary=hvc.report.get("hvc_summary"))
+    lv = results.get("livestock")
+    if lv is not None and lv.ok and not lv.data.empty:
+        v = _by_level(lv, base, level)
+        for c in v.columns:
+            df[c] = v[c].values
+        df["livestock_raw"] = df["livestock_raw"].fillna(0.0)
+        share = float(settings.get("livestock_share", config.DEFAULT_SETTINGS["livestock_share"]))
+        if not 0 <= share <= 1:
+            raise ValueError("The livestock share of exposure must be between 0 and 1.")
+        notes.append(lv.report.get("livestock_note", ""))
+        notes.append(f"Exposure = {1 - share:.2f} × normalized crop area (ha) + {share:.2f} × normalized livestock "
+                     "(TLU) – hectares and heads are normalized separately, never added.")
+        info.update(livestock=True, livestock_share=share, livestock_summary=lv.report.get("livestock_summary"),
+                    livestock_as_of=lv.report.get("livestock_summary", {}).get("as_of"))
+    info["note"] = " ".join(n for n in notes if n)
+    info["label"] = config.EXPOSURE_LABEL if info["livestock"] else         "Standing crops (rice, corn, HVC)" if info["hvc"] else config.INDICATORS["crops"][0]
+    return info
 
 
 def monthly_envi(df: pd.DataFrame, meta: dict, settings: dict, drought_report: dict) -> dict[str, pd.DataFrame]:
@@ -241,13 +297,21 @@ def month_view(df: pd.DataFrame, meta: dict, month: str, f: pd.DataFrame, label:
     return d, m
 
 
+def _heads_at_risk(risk: pd.DataFrame) -> dict[str, int]:
+    """{'Cattle': 12,345, …}: heads per species in the given areas, ordered by livestock units."""
+    from .exposure import SPECIES_LABELS, TLU
+    cols = [c for c in risk.columns if c.startswith("lv_") and c[3:] in TLU and TLU[c[3:]] > 0]
+    heads = {c[3:]: float(risk[c].sum()) for c in cols}
+    order = sorted(heads, key=lambda s: -heads[s] * TLU[s])
+    return {SPECIES_LABELS[s]: int(round(heads[s])) for s in order if heads[s] > 0}
+
+
 def summarize(df: pd.DataFrame, breaks: list[float]) -> dict:
     counts = df["envi_class"].value_counts().to_dict()
     counts = {c: int(counts.get(c, 0)) for c in config.CLASS_NAMES + [config.NO_DATA_LABEL]}
     risk = df[df.envi_class.isin(["High", "Very High"])]
     crop_cols = [c for c in df.columns if c.startswith("crop_")]
-    at_risk = {c.replace("crop_", "").replace("_total", "").replace("_", " ").title(): float(risk[c].sum())
-               for c in crop_cols}
+    at_risk = {crop_label(c): float(risk[c].sum()) for c in crop_cols}
     top = df.dropna(subset=["envi"]).head(10)
     hotspots = []
     for prov, g in risk.groupby("province_label", sort=False):
@@ -262,6 +326,10 @@ def summarize(df: pd.DataFrame, breaks: list[float]) -> dict:
         "crop_at_risk_ha": float(risk["crops_raw"].sum()) if "crops_raw" in risk else 0.0,
         "crop_at_risk_by_crop": at_risk,
         "crop_total_ha": float(df["crops_raw"].sum()),
+        **({"livestock_at_risk_tlu": float(risk["livestock_raw"].sum()),
+            "livestock_total_tlu": float(df["livestock_raw"].sum()),
+            # heads at risk per species, largest TLU first (bee colonies left out)
+            "livestock_at_risk_heads": _heads_at_risk(risk)} if "livestock_raw" in df else {}),
         "n_at_risk": int(len(risk)),
         "top10": [{"rank": int(r["rank"]), "area": r.area, "province": r.province_label,
                    "envi": float(r.envi), "class": r.envi_class, "color": r.class_color,
@@ -279,6 +347,12 @@ def display_table(df: pd.DataFrame) -> pd.DataFrame:
         "hazard_norm": "Drought (norm)", "damage_norm": "Damage (norm)", "crops_norm": "Crops (norm)",
         "envi": "ENVI", "envi_class": "Class", "missing_indicators": "Missing indicators",
     }
-    extra = [c for c in df.columns if c.startswith(("crop_", "dmg_", "cat_"))]
+    if "livestock_raw" in df:
+        cols.update({"livestock_raw": "Livestock (TLU)", "crops_area_norm": "Crop area (norm)",
+                     "livestock_norm": "Livestock (norm)", "crops_norm": "Exposure (norm)"})
+    extra = [c for c in df.columns if c.startswith(("crop_", "hvc_", "dmg_", "cat_", "lv_")) or c == "livestock_heads"]
     out = df[list(cols) + extra].rename(columns=cols)
+    out = out.rename(columns={"hvc_short_ha": "HVC short-cycle (ha)", "hvc_perennial_ha": "HVC tree crops (ha)",
+                              "livestock_heads": "Livestock (heads)"})
+    out = out.rename(columns={c: f"{c[3:].replace('_', ' ').title()} (heads)" for c in extra if c.startswith("lv_")})
     return out

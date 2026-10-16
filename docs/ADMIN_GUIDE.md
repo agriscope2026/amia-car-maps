@@ -21,21 +21,23 @@ forecast.
      has one column per day (DAY_1 … DAY_10, in mm; DAY_1 is the first day). The system makes **one map per day**
      (no 10-day total map).
    - **Seasonal rainfall and drought:** the first month (and, for seasonal rainfall, the last month).
-   - **ENVI:** the weights are drought forecast 50 %, historical damage 25 % and standing crops 25 %. You can
-     change them (they must add up to 1), and the way classes are drawn.
+   - **ENVI:** the weights are drought forecast 70 %, historical damage 15 % and exposure (standing crops, plus
+     livestock when uploaded) 15 %. You can change them (they must add up to 1), and the way classes are drawn.
    - **Drought forecast from PAGASA:** on the ENVI and Drought forecast upload pages, **Fetch from PAGASA
      DroughtCaster** fills in the drought forecast file for the six CAR provinces from
      https://droughtcaster.pagasa.dost.gov.ph/ and sets the issue date and period from it. Then click **Validate** as
      for an upload. If PAGASA cannot be reached, upload the template instead.
-   - **ENVI monthly update:** each month, make a new ENVI version with the new drought forecast and the new standing
-     crops. Historical damage can be left empty: the file of the latest ENVI issue is reused (the upload page says
-     which one). Upload a new damage file only when it changes. The new issue gets a season ENVI map plus one map per
-     forecast month, all computed from the new forecast; earlier issues stay in the archive.
+   - **ENVI monthly update:** each month, make a new ENVI version with the new drought forecast, the new standing
+     rice and corn (with its "as of" date) and the latest **HVCDP Regional Summary**. Historical damage and the
+     livestock inventory can be left empty: the files of the latest ENVI issue are reused (the upload page says
+     which ones). Upload a new damage file only when it changes, and a new livestock file each quarter. The new issue
+     gets a season ENVI map plus one map per forecast month, all computed from the new forecast; earlier issues stay
+     in the archive. See *ENVI: high-value crops and livestock* below.
 2. **Download the template.** Click **Download template** next to each file. The template already lists all 77
    municipalities (or the 6 provinces for drought). Fill in the values and keep the PSGC, province and
    municipality columns.
    - Rainfall is in **millimetres (mm)**.
-   - Crop and damage areas are in **hectares (ha)**.
+   - Crop and damage areas are in **hectares (ha)**. Livestock is in **number of heads**.
    - Drought uses the PAGASA words: *not affected*, *dry condition*, *dry spell*, *drought*.
    - Leave a cell empty if there is no value. That municipality will show as "No data".
 3. **Upload and validate.** Choose the file and click **Validate**. The report shows:
@@ -64,6 +66,63 @@ forecast.
      version of the same map was published, it is archived.
 
 If you change the text after generating exports, generate them again before publishing.
+
+## ENVI: high-value crops and livestock
+
+The third ENVI indicator measures what is exposed to the drought. Besides rice and corn it can include high-value
+crops (HVC) and livestock & poultry. Both are optional uploads on the ENVI upload page.
+
+**Hectares and heads are never added together.** Rice, corn and HVC are all in hectares, so they are added into one
+crop area. Livestock is counted in heads, so it is kept apart:
+1. Each species is converted to **livestock units (TLU)** so that a chicken does not count like a carabao (carabao 0.7,
+   cattle and horse 0.65, swine 0.25, goat and sheep 0.1, chicken and duck 0.01 per head; bee colonies are listed but
+   not counted).
+2. Crop area and livestock units are each rescaled to 0–1 (min–max).
+3. **Exposure = 0.75 × crop area + 0.25 × livestock.** Change the livestock share on the upload page (next to the
+   livestock file) if DA-RFO-CAR decides on another split.
+
+Without a livestock file the indicator is the crop area alone, as before.
+
+### High-value crops: the HVCDP Regional Summary
+
+Upload the **HVCDP Regional Summary** workbook exactly as HVCDP sends it (e.g. *HVC REGIONAL SUMMARY
+2025-2026.xlsx*). There is no template: the file has one row per planting with the date planted, commodity, crop
+group, area planted (ha) and target month of harvest.
+- **Large file:** the workbook is over 5 MB. The upload page reads it in your browser and uploads only the columns
+  it needs (a few hundred kB). It says how many planting records it read.
+- **Same date as rice and corn:** the HVC **standing area** is computed for the **"Standing crops as of"** date
+  you enter next to the rice and corn file (e.g. September 30, 2026). A crop is standing if it was planted on or
+  before that date and is not yet harvested. Tomato, chayote and other multi-harvest crops are counted for about
+  9 weeks after their target harvest. Banana, coffee, cacao, mango, citrus and other tree crops always count once
+  planted. Plantings after the date are not counted.
+- **The crop-stage columns of the workbook are not used.** They are computed from the day the file is opened, so
+  they change every day and do not match any fixed date.
+- **El Niño timing:** the validation report shows, for each outlook month, how much HVC will still be in the field
+  and how much is due for harvest. Most vegetables standing at the end of September are harvested before the
+  drought months (January–March); crops planted later are not in the file yet. Ask HVCDP for the dry-season planting
+  targets.
+- **Things the report flags:** provinces with no records at all (e.g. Abra – their HVC counts as 0 until HVCDP sends
+  data), records without a crop group (filled in from the commodity), the same commodity spelled differently
+  (Peanut / peanut / PEANUT, merged), records without a target harvest or with one before the planting date (the
+  usual duration of that commodity is used), and single records of 200 ha or more (check that they are new plantings
+  and not a municipal total or an old plantation).
+
+### Livestock & poultry inventory
+
+- **Quarterly:** upload the DA livestock inventory each quarter. Title rows, the two header rows, the CAR total and
+  province subtotal rows are handled automatically, or use **Download template** (one row per municipality).
+- **"Inventory as of":** enter the inventory date, normally the last day of the quarter (the **End of last quarter**
+  button fills it in). If the file title gives a different month (e.g. "As of March, 2026" in a "2nd QTR" sheet), the
+  report asks you to check which is right.
+- **Reused between quarters:** without a new file, the latest issue's inventory and its date are reused. Untick
+  *Reuse …* to leave livestock out of an issue.
+- **Things the report flags:** a province total that differs from the sum of its municipalities (the municipal
+  figures are used), two animal columns with the same figures in every municipality (usually a copy-paste error),
+  and municipalities with no figures (counted as 0).
+
+The dates of each input are printed on the presentation, the poster and the Methodology sheet of the Excel. The
+Computation sheet shows the livestock share, the livestock units and the exposure formula, and recalculates when
+you change them.
 
 ## How the maps look
 
@@ -97,7 +156,7 @@ The drought legend uses red for **Drought**. The seasonal legends show a descrip
 Clicking a municipality on the dashboard opens a details window. It shows:
 - the value and category on the current map;
 - the values day by day or month by month (click one to show that map);
-- the ENVI indicators;
+- the ENVI indicators (with the HVC area, livestock heads and livestock units when they were uploaded);
 - the standing crops (all crops, in hectares);
 - the farm recommendations;
 - the recommendations that name the municipality or its province, with the full list below.
@@ -220,6 +279,8 @@ On **Reference data** you can update:
 
 - **Standing crops:** use the standing-crops template, with one column per crop in hectares, and set the "as of"
   date. Every crop column becomes a choice in the dashboard's crop overlay.
+- **Livestock template:** a blank livestock & poultry form with every municipality, for the provincial
+  coordinators. The HVCDP Regional Summary and the livestock inventory themselves are uploaded with each ENVI issue.
 - **Irrigation sources and dams:** a list with name, type (e.g. NIS, CIS, SWIP, SSIP, DAM, RIVER – any other type is accepted and gets its own colour and legend entry; an optional TYPE_LABEL column gives it a full name), latitude and
   longitude in decimal degrees, river, service area (ha), status and source. A GeoJSON file also works. Saving
   replaces the whole layer. Locations outside CAR, or with latitude and longitude swapped, are reported.

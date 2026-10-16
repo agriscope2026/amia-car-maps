@@ -258,6 +258,14 @@ def test_template_roundtrip(kind):
     assert {m for m in p["report"]["methods"]} == {"exact"}
 
 
+def test_livestock_template_lists_every_municipality():
+    name, data = templates.template("livestock")
+    df = pd.read_excel(io.BytesIO(data), sheet_name="DATA")
+    assert name.endswith(".xlsx") and len(df) == 77
+    assert list(df.columns[:3]) == ["PSGC", "PROVINCE", "MUNICIPALITY"] and df[df.columns[3:]].isna().all().all()
+    assert "CATTLE" in df.columns and "templates" not in name
+
+
 def test_drought_template_roundtrip():
     name, data = templates.template("drought")
     df = pd.read_csv(io.BytesIO(data), encoding="utf-8-sig")
@@ -351,10 +359,10 @@ def test_seasonal_map_with_crop_circles(tmp_path):
 def test_envi_default_weights_50_25_25():
     files = {k: (p.read_bytes(), p.name) for k, p in config.DEFAULT_FILES.items()}
     p = envi_product.build(files, {"issue_date": "2026-09-15", "period_start": "2026-10", "period_end": "2027-03"})
-    assert p["method"]["weights"] == {"hazard": 0.5, "damage": 0.25, "crops": 0.25}
+    assert p["method"]["weights"] == {"hazard": 0.7, "damage": 0.15, "crops": 0.15}
     v = p["layers"][0]["values"]["KALINGA|TABUK"]
     # normalized values are rounded to 2 decimals in the payload, hence the tolerance
-    assert v["envi"] == pytest.approx(0.5 * v["hazard_norm"] + 0.25 * v["damage_norm"] + 0.25 * v["crops_norm"], abs=0.01)
+    assert v["envi"] == pytest.approx(0.7 * v["hazard_norm"] + 0.15 * v["damage_norm"] + 0.15 * v["crops_norm"], abs=0.01)
 
 
 def test_envi_exports_with_crop_circles(tmp_path):

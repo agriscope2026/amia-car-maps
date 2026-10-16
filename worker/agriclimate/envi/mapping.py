@@ -103,7 +103,8 @@ def texts(meta: dict) -> dict:
         "issued": f"(as of {lab['issued']})",
         "legend_title": "LEGEND",
         "note": ("Note: ENVI = weighted sum of min–max normalized indicators – drought forecast "
-                 f"({w['hazard']:.2f}), historical El Niño damage ({w['damage']:.2f}) and standing crops "
+                 f"({w['hazard']:.2f}), historical El Niño damage ({w['damage']:.2f}) and "
+                 f"{'crops & livestock exposure' if (meta.get('exposure') or {}).get('livestock') else 'standing crops'} "
                  f"({w['crops']:.2f}); higher = more vulnerable. Classes: {meth}."),
         "source_short": "Data: DOST-PAGASA; DA-RFO-CAR\nMap: DA-RFO-CAR AMIA",
         "disclaimer": ("Disclaimer:\nDA RFO CAR is not liable for any loss or damage arising from the use of this "

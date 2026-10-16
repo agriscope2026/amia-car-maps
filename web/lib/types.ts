@@ -105,6 +105,33 @@ export interface Payload {
   report?: any;
   recommendations_draft?: string;
   crop_advice_draft?: Record<string, string>;
+  exposure?: Exposure; // ENVI: what the crops indicator was made of
+}
+
+/** ENVI exposure inputs besides rice and corn: HVC (HVCDP Regional Summary) and livestock. */
+export interface Exposure {
+  hvc: boolean;
+  livestock: boolean;
+  livestock_share: number;
+  crops_as_of?: string | null;
+  livestock_as_of?: string | null;
+  hvc_summary?: HvcSummary | null;
+  livestock_summary?: { as_of: string | null; heads: Record<string, number>; tlu_total: number; tlu_factors: Record<string, number> } | null;
+}
+
+export interface HvcSummary {
+  as_of: string;
+  n_records: number;
+  first_planting: string;
+  last_planting: string;
+  standing_ha: number;
+  short_cycle_ha: number;
+  perennial_ha: number;
+  by_province: Record<string, number>;
+  by_group: Record<string, number>;
+  top_commodities: { commodity: string; ha: number }[];
+  outlook: { month: string; label: string; short_cycle_ha: number; perennial_ha: number; harvest_due_ha: number }[];
+  provinces_without_data: string[];
 }
 
 export interface CatalogEntry {

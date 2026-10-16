@@ -40,6 +40,8 @@ INDICATORS = {
     "damage": ("Historical damage", "Historical El Niño / drought crop damage", "ha"),
     "crops": ("Standing crops", "Standing crop area", "ha"),
 }
+# with HVC and/or livestock uploaded the crops indicator becomes agricultural exposure (same weight)
+EXPOSURE_LABEL = "Exposure (crops & livestock)"
 
 CLASS_NAMES = ["Very Low", "Low", "Moderate", "High", "Very High"]
 CLASS_COLORS = {
@@ -70,8 +72,8 @@ MONTHS = ["January", "February", "March", "April", "May", "June", "July",
           "August", "September", "October", "November", "December"]
 
 DEFAULT_SETTINGS = {
-    # DA-RFO-CAR weighting: drought forecast 50 %, historical damage 25 %, standing crops 25 %
-    "weights": {"hazard": 0.5, "damage": 0.25, "crops": 0.25},
+    # DA-RFO-CAR weighting: drought forecast 70 %, historical damage 15 %, exposure (standing crops, livestock) 15 %
+    "weights": {"hazard": 0.7, "damage": 0.15, "crops": 0.15},
     "classification": "equal",          # equal | quantile | jenks
     "hazard_numeric_mode": "rainfall_pct_normal",  # used only if the forecast is numeric
     "hazard_scaling": "minmax",         # minmax | fixed (score / max possible score)
@@ -84,7 +86,11 @@ DEFAULT_SETTINGS = {
     "reporting_month": "2026-09",       # month the report is issued ("as of"), YYYY-MM
     "period_start": "2026-10",          # first month covered by the data / forecast
     "period_end": "2027-03",            # last month covered
-    "crops_as_of": "2026-09-15",        # standing crops inventory date, YYYY-MM-DD
+    "crops_as_of": "2026-09-15",        # standing crops inventory date, YYYY-MM-DD (HVC standing is computed for it)
+    "livestock_as_of": None,            # livestock inventory date, YYYY-MM-DD (end of the quarter)
+    # share of livestock in the exposure indicator when a livestock file is given: exposure =
+    # (1 − share) × normalized crop area (rice + corn + HVC, ha) + share × normalized livestock (TLU)
+    "livestock_share": 0.25,
     "recommendations": "",              # agricultural recommendations (free text, editable)
 }
 
@@ -116,6 +122,7 @@ def period_labels(settings: dict | None = None) -> dict:
         "period": period,
         "issued": issued,
         "crops_as_of": date_label(s["crops_as_of"]),
+        "livestock_as_of": date_label(s["livestock_as_of"]) if s.get("livestock_as_of") else "",
         "subtitle": f"Outlook: {period} (as of {issued})",
     }
 

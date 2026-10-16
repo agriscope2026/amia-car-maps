@@ -524,12 +524,44 @@ def load_crops(src, filename: str, gaz: Gazetteer, settings: dict | None = None)
 
 
 LOADERS = {"drought": load_drought, "damage": load_damage, "crops": load_crops}
+OPTIONAL = ("hvc", "livestock")      # extra exposure inputs (envi/exposure.py), merged into the crops indicator
+
+
+def loaders() -> dict:
+    from . import exposure
+    return {**LOADERS, "hvc": exposure.load_hvc, "livestock": exposure.load_livestock}
 
 
 def load_all(files: dict, gaz: Gazetteer | None = None, settings: dict | None = None) -> dict[str, DatasetResult]:
-    """files: {dataset: (path_or_bytes, filename)}"""
+    """files: {dataset: (path_or_bytes, filename)} – drought, damage, crops and optionally hvc, livestock."""
     gaz = gaz or load_gazetteer()
-    return {k: LOADERS[k](src, name, gaz, settings) for k, (src, name) in files.items()}
+    fns = loaders()
+    out = {k: fns[k](src, name, gaz, settings) for k, (src, name) in files.items()}
+    _check_crop_columns(out)
+    return out
+
+
+_HEADS_COL = re.compile(r"livestock|poultry|heads|cattle|carabao|swine|hog|goat|chicken", re.I)
+_HVC_COL = re.compile(r"\bhvc\b|high[ -]?value", re.I)
+
+
+def _check_crop_columns(results: dict) -> None:
+    """The standing-crops file is in hectares: animals belong in the livestock file, and an HVC column would count
+    HVC twice when the HVCDP Regional Summary is uploaded too."""
+    crops = results.get("crops")
+    if crops is None:
+        return
+    cols = crops.report.get("crop_columns", [])
+    heads = [c for c in cols if _HEADS_COL.search(str(c))]
+    if heads:
+        crops.report["errors"].append(
+            f"Column(s) {', '.join(map(str, heads))} look like livestock (heads) – heads cannot be added to hectares. "
+            "Remove them and upload the livestock inventory in the livestock field instead.")
+    hvc = [c for c in cols if _HVC_COL.search(str(c))]
+    if hvc and results.get("hvc") is not None:
+        crops.report["errors"].append(
+            f"Column(s) {', '.join(map(str, hvc))} hold high-value crops and the HVCDP Regional Summary is uploaded "
+            "too – HVC would be counted twice. Remove the column(s) or the HVCDP file.")
 
 
 # -------------------------------------------------------------- templates ---

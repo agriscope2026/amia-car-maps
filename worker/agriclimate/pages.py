@@ -429,8 +429,10 @@ def _envi_text(payload: dict) -> tuple[list[str], list[str]]:
     s_risk = risk(season)
     vh = [k for k, v in season["values"].items() if v.get("class") == "Very High"]
     crops = sum(season["values"][k].get("crops_raw") or 0 for k in s_risk)
+    has_lv = any(isinstance(v.get("livestock_raw"), (int, float)) for v in season["values"].values())
+    lv = sum(season["values"][k].get("livestock_raw") or 0 for k in s_risk)
     exp = [f"Season outlook: {len(s_risk)} of {len(season['values'])} municipalities High or Very High, holding "
-           f"{crops:,.0f} ha of standing crops."]
+           f"{crops:,.0f} ha of standing crops" + (f" and {lv:,.0f} livestock units (TLU)." if has_lv else ".")]
     if vh:
         exp.append(f"Very High: {_list([_short(k) for k in vh])}.")
     if months:

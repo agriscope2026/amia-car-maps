@@ -4,7 +4,7 @@ Endpoints
   GET  /health
   GET  /reference/gazetteer
   GET  /templates/{kind}?period_start=YYYY-MM&period_end=YYYY-MM
-  POST /preview/{type}            multipart: file (or drought/damage/crops for ENVI) + settings JSON
+  POST /preview/{type}            multipart: file (or drought/damage/crops [+ hvc, livestock] for ENVI) + settings
   POST /reference/{crops|irrigation}
   POST /jobs/{type}               same as preview + version_id → export job (queued, with progress)
   GET  /jobs/{id}                 status, progress, manifest, uploaded object paths
@@ -71,6 +71,13 @@ async def _read(f: UploadFile | None) -> tuple[bytes, str] | None:
     return data, f.filename or "upload"
 
 
+async def _files(file, drought_file, damage, crops, hvc, livestock) -> dict:
+    """Uploaded inputs by dataset (ENVI: drought, damage, crops and the optional hvc, livestock)."""
+    given = {"file": file, "drought": drought_file, "damage": damage, "crops": crops, "hvc": hvc,
+             "livestock": livestock}
+    return {k: v for k, v in {k: await _read(f) for k, f in given.items()}.items() if v}
+
+
 def _settings(raw: str | None) -> dict:
     try:
         return json.loads(raw) if raw else {}
@@ -133,11 +140,11 @@ def template(kind: str, period_start: str = "2026-10", period_end: str = "2027-0
 @app.post("/preview/{ptype}", dependencies=[Depends(auth)])
 async def preview(ptype: str, settings: str = Form("{}"), file: UploadFile | None = File(None),
                   drought_file: UploadFile | None = File(None, alias="drought"),
-                  damage: UploadFile | None = File(None), crops: UploadFile | None = File(None)):
+                  damage: UploadFile | None = File(None), crops: UploadFile | None = File(None),
+                  hvc: UploadFile | None = File(None), livestock: UploadFile | None = File(None)):
     if ptype not in PRODUCT_TYPES:
         raise HTTPException(404, f"Unknown product type '{ptype}'")
-    files = {k: v for k, v in {"file": await _read(file), "drought": await _read(drought_file),
-                               "damage": await _read(damage), "crops": await _read(crops)}.items() if v}
+    files = await _files(file, drought_file, damage, crops, hvc, livestock)
     return build_payload(ptype, files, _settings(settings))
 
 
@@ -208,12 +215,12 @@ def _run_job(job: dict, ptype: str, files: dict, settings: dict, given: dict | N
 async def create_job(ptype: str, settings: str = Form("{}"), file: UploadFile | None = File(None),
                      drought_file: UploadFile | None = File(None, alias="drought"),
                      damage: UploadFile | None = File(None), crops: UploadFile | None = File(None),
+                     hvc: UploadFile | None = File(None), livestock: UploadFile | None = File(None),
                      payload: str | None = Form(None)):
     """Export job from uploaded files, or (rainfall/drought) from an already validated draft payload."""
     if ptype not in PRODUCT_TYPES:
         raise HTTPException(404, f"Unknown product type '{ptype}'")
-    files = {k: v for k, v in {"file": await _read(file), "drought": await _read(drought_file),
-                               "damage": await _read(damage), "crops": await _read(crops)}.items() if v}
+    files = await _files(file, drought_file, damage, crops, hvc, livestock)
     s = _settings(settings)
     given = None
     if payload:

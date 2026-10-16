@@ -45,6 +45,20 @@ def test_preview_envi_needs_three_files(client):
     assert not p["ok"] and set(p["report"]) == {"drought", "damage", "crops"}
 
 
+def test_preview_envi_with_hvc_and_livestock(client):
+    from test_exposure import ROWS, da_form, summary_csv
+    files = {k: (p.name, p.read_bytes()) for k, p in config.DEFAULT_FILES.items()}
+    files["hvc"] = ("summary.csv", summary_csv(ROWS))
+    files["livestock"] = ("livestock.xlsx", da_form())
+    s = {"issue_date": "2026-10-01", "period_start": "2026-10", "period_end": "2027-03", "crops_as_of": "2026-09-30",
+         "livestock_as_of": "2026-06-30", "livestock_share": 0.25}
+    p = client.post("/preview/envi", data={"settings": json.dumps(s)}, files=files).json()
+    assert p["ok"] and set(p["report"]) == {"drought", "damage", "crops", "hvc", "livestock"}
+    assert p["exposure"]["hvc"] and p["exposure"]["livestock"] and p["method"]["crops_label"] == config.EXPOSURE_LABEL
+    atok = p["layers"][0]["values"]["BENGUET|ATOK"]
+    assert atok["crop_hvc"] == 12.0 and atok["livestock_raw"] > 0 and "livestock_norm" in atok
+
+
 def test_drought_export_job_end_to_end(client):
     f = config.DEFAULT_FILES["drought"]
     s = {"issue_date": "2026-09-15", "period_start": "2026-10"}
