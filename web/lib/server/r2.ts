@@ -27,9 +27,12 @@ async function check(r: Response, what: string) {
 }
 
 export async function r2Put(bucket: string, key: string, body: BodyInit, contentType?: string) {
-  await check(await aws().fetch(objUrl(bucket, key), {
-    method: "PUT", body, headers: contentType ? { "Content-Type": contentType } : {},
-  }), `upload of ${key}`);
+  // R2 rejects streamed (chunked) uploads with 411 MissingContentLength. On Vercel the body passed through
+  // aws4fetch's Request ends up streamed, so buffer it and send an explicit Content-Length.
+  const bytes = new Uint8Array(await new Response(body).arrayBuffer());
+  const headers: Record<string, string> = { "Content-Length": String(bytes.byteLength) };
+  if (contentType) headers["Content-Type"] = contentType;
+  await check(await aws().fetch(objUrl(bucket, key), { method: "PUT", body: bytes, headers }), `upload of ${key}`);
 }
 
 export async function r2Get(bucket: string, key: string): Promise<Blob> {
