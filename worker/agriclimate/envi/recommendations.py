@@ -131,8 +131,13 @@ def generate(df: pd.DataFrame, meta: dict, results: dict, settings: dict) -> str
         "irrigated rice).",
         f"{n + 1}. Risk transfer: enroll standing crops with PCIC crop insurance before the onset of drought and "
         "prepare damage reporting through the DRRM operations center.",
-        f"{n + 2}. Livestock: secure water and forage reserves for livestock and poultry in the most affected provinces.",
-        f"{n + 3}. Advisories: disseminate monthly DA/PAGASA farm advisories and update this index when a new "
-        "forecast is issued.",
     ]
+    n += 2
+    # only when the issue has a livestock inventory
+    if (meta.get("exposure") or {}).get("livestock"):
+        lines.append(f"{n}. Livestock: secure water and forage reserves for livestock and poultry in the most affected "
+                     "provinces.")
+        n += 1
+    lines.append(f"{n}. Advisories: disseminate monthly DA/PAGASA farm advisories and update this index when a new "
+                 "forecast is issued.")
     return "\n".join(lines)

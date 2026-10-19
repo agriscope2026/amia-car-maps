@@ -28,9 +28,9 @@ forecast.
      https://droughtcaster.pagasa.dost.gov.ph/ and sets the issue date and period from it. Then click **Validate** as
      for an upload. If PAGASA cannot be reached, upload the template instead.
    - **ENVI monthly update:** each month, make a new ENVI version with the new drought forecast, the new standing
-     rice and corn (with its "as of" date) and the latest **HVCDP Regional Summary**. Historical damage and the
-     livestock inventory can be left empty: the files of the latest ENVI issue are reused (the upload page says
-     which ones). Upload a new damage file only when it changes, and a new livestock file each quarter. The new issue
+     rice and corn (with its "as of" date) and the latest **HVCDP Regional Summary**. Historical damage can be left
+     empty: the file of the latest ENVI issue is reused (the upload page says which one). Livestock is optional: it
+     is included only when you upload an inventory or tick *Reuse …* for the previous one. The new issue
      gets a season ENVI map plus one map per forecast month, all computed from the new forecast; earlier issues stay
      in the archive. See *ENVI: high-value crops and livestock* below.
 2. **Download the template.** Click **Download template** next to each file. The template already lists all 77
@@ -114,8 +114,8 @@ group, area planted (ha) and target month of harvest.
 - **"Inventory as of":** enter the inventory date, normally the last day of the quarter (the **End of last quarter**
   button fills it in). If the file title gives a different month (e.g. "As of March, 2026" in a "2nd QTR" sheet), the
   report asks you to check which is right.
-- **Reused between quarters:** without a new file, the latest issue's inventory and its date are reused. Untick
-  *Reuse …* to leave livestock out of an issue.
+- **Optional, reusable between quarters:** without a file, livestock is left out of the issue and not mentioned in
+  its maps, report or recommendations. Tick *Reuse …* to use the latest issue's inventory and its date instead.
 - **Things the report flags:** a province total that differs from the sum of its municipalities (the municipal
   figures are used), two animal columns with the same figures in every municipality (usually a copy-paste error),
   and municipalities with no figures (counted as 0).

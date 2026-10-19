@@ -215,7 +215,8 @@ export default function UploadWizard({ type, geo }: { type: ProductType; geo: Ga
   type ReuseInfo = { filename: string; issue: string; status: string; as_of: string | null } | null;
   const [reuseAll, setReuseAll] = useState<{ damage: ReuseInfo; livestock: ReuseInfo } | undefined>(undefined);
   const reuse = reuseAll === undefined ? undefined : reuseAll.damage;
-  const [useLivestock, setUseLivestock] = useState(true);
+  // livestock is only included when uploaded, or when the admin ticks "reuse" for the previous inventory
+  const [useLivestock, setUseLivestock] = useState(false);
   useEffect(() => {
     if (type !== "envi") return;
     api<{ damage: ReuseInfo; livestock: ReuseInfo }>("/api/admin/reuse")
@@ -392,7 +393,7 @@ export default function UploadWizard({ type, geo }: { type: ProductType; geo: Ga
             {(["hazard", "damage", "crops"] as const).map((k) => (
               <div className="field" key={k}>
                 <label htmlFor={`w-${k}`}>
-                  Weight – {k === "hazard" ? "drought forecast" : k === "damage" ? "historical damage" : "exposure (crops + livestock)"}
+                  Weight – {k === "hazard" ? "drought forecast" : k === "damage" ? "historical damage" : files.livestock || (reuseAll?.livestock && useLivestock) ? "exposure (crops + livestock)" : "standing crops"}
                 </label>
                 <input
                   id={`w-${k}`}
