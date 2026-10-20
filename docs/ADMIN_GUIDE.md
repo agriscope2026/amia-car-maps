@@ -287,6 +287,39 @@ On **Reference data** you can update:
 
 Always click **Validate** first, then **Save**.
 
+## Activities
+
+**Activities** (editors and administrators) is where the activities in the municipalities are recorded – for example
+seed distribution, trainings, water-system repairs or insurance enrolment. Each activity has:
+
+- **where it takes place**: one or more municipalities, in one or more provinces (a training in three towns, a
+  province-wide forum or a region-wide campaign is still *one* activity, so its farmers and budget are counted once);
+- the **activity** itself and an optional **category** (Training, Distribution of inputs, Infrastructure …);
+- the **status**: *To conduct*, *Ongoing*, *Completed* or *Postponed*;
+- the **map it responds to**: ENVI, Drought, 10-day rainfall, Seasonal rainfall, or *All maps (general)*;
+- optional start and end dates, number of farmer beneficiaries, budget (PHP), implementing office and remarks.
+
+Two ways to enter them:
+
+1. **By hand:** under *Where does it take place?* tick a **province** for all of its municipalities, or click
+   *Choose municipalities* to tick some of them (search finds a town quickly; **Whole CAR** and **Clear** are there
+   too). The line below the list says what is chosen, e.g. "Abra (all 27) · Benguet: La Trinidad, Tublay". Fill in
+   the rest and click **Add activity**. The places, status and map stay filled in for the next entry. In the list below, change a status straight from its drop-down (e.g. *To conduct*
+   → *Ongoing*), or use **Edit** / **Delete**.
+2. **From Excel:** click **Download template**, fill in one row per activity (delete the two example rows), then
+   **Validate** and **Save**. Names are matched like the map inputs. For several places, separate them with `;` in one
+   cell (`Bangued; Tayum`); for whole provinces write `All` in MUNICIPALITY and the province(s) in PROVINCE
+   (`Abra; Benguet`); `All` in both means the whole CAR. Each row stays one activity. Errors name the spreadsheet row, and nothing is saved until the whole file is
+   valid. Tick *Replace all current activities* to upload a complete master list instead of adding to the current one.
+
+Saved activities appear at once on the public **Activities** page. That page takes the latest published map
+(ENVI, drought or rainfall) and shows how many municipalities are at risk, how many of them have an activity and
+which have none yet, with charts by status, province, category and month. Visitors can choose which map colours
+count as "at risk" (by default the two highest ENVI and drought classes, and the heavier half of the rainfall
+classes). An activity counts as covering each of its municipalities unless it is *Postponed*; the figures for
+farmers and budget count each activity once, in full. The activities, including
+beneficiaries and budget, are public.
+
 ## Audit log
 
 **Audit log** (administrators) lists sign-ins, uploads, checks, edits, exports and publishing, with the time in

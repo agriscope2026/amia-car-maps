@@ -15,6 +15,9 @@ Administrative Region (DA-RFO-CAR), AMIA Program. It has two parts:
     (seasonal rainfall, drought and ENVI), with a circle legend.
   - Print maps follow the DA-RFO-CAR sample layouts in `sample data/`. The 10-day forecast has one map per
     day; seasonal rainfall one map per month (there are no 10-day or season total maps).
+- **Activities page:** the activities of DA and its partners in each municipality (to conduct, ongoing,
+  completed, postponed) next to the areas at risk on the latest ENVI, drought or rainfall map, with large figures
+  and charts. Staff enter activities by hand or import them from Excel.
 - **Photo mode** on the dashboard shows the finished map images with the recommendations (the infographic for
   ENVI).
 
@@ -64,10 +67,17 @@ npm run db:reset     # schema + seed (77 municipalities, boundaries, legends) + 
 ```
 
 `db:reset` loads the same `supabase/migrations` and `supabase/seed.sql` that production uses.
-`supabase/local/compat.sql` stands in for Supabase's `auth`/`storage` schemas. It creates the admin
-**admin@example.com / admin-local-123**; change it with `LOCALDB_ADMIN_EMAIL` / `LOCALDB_ADMIN_PASSWORD`.
+`supabase/local/compat.sql` stands in for Supabase's `auth`/`storage` schemas.
+
+**Admin login:** `DEV_ADMIN_EMAIL` / `DEV_ADMIN_PASSWORD` in `web/.env.local` (password 8+ characters). `node dev.mjs`
+creates or updates this admin in the local database on every start and prints it, so it is the one login to use.
+(`db:reset` on its own creates admin@example.com / admin-local-123, or `LOCALDB_ADMIN_EMAIL` / `LOCALDB_ADMIN_PASSWORD`.)
 
 - Add more users with `npm run db:user -- someone@da.gov.ph <password> editor` (or `admin`).
+- **Sample activities (development only):** `db:reset` and `node dev.mjs` (when the list is empty) add about 80
+  made-up activities, tagged `sample (dev)`, so the Activities page has something to show. Remove them with
+  `node scripts/localdb.mjs activities-demo --clear`, or make a fresh set with `node scripts/localdb.mjs activities-demo`.
+  They are never in the migrations or `seed.sql`, so production never gets them.
 - Open psql with the command printed by `node scripts/localdb.mjs psql`.
 - Run `db:reset` again whenever you want a clean database.
 - After pulling changes that add database migrations, run `npm run db:migrate` (`node dev.mjs` does it for you).
@@ -136,7 +146,7 @@ cd web && E2E_EMAIL=admin@example.com E2E_PASSWORD=admin-local-123 node scripts/
 | `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY` | optional | Cloudflare R2 file storage instead of Supabase Storage (uploads, exports) |
 | `R2_BUCKET`, `R2_PUBLIC_BUCKET`, `R2_PUBLIC_URL` | with R2 | Private bucket (default `amia-car-maps`), public bucket (default `amia-car-maps-public`, public access on) and its public URL. Published files are linked to the public bucket only when `R2_PUBLIC_URL` is a **custom domain**; with an `*.r2.dev` address (blocked on some networks) or none, they are served through the app (`/api/exports/…`: previews streamed and cached, big files via 5-minute signed links) |
 | `DATABASE_URL` | local / self-hosted | PostgreSQL + PostGIS instead of Supabase (e.g. the local dev database) |
-| `DEV_ADMIN_EMAIL`, `DEV_ADMIN_PASSWORD` | no-database mode only | Single admin login without any database |
+| `DEV_ADMIN_EMAIL`, `DEV_ADMIN_PASSWORD` | local development | The admin login: set in the local database by `node dev.mjs`, or the single login without any database |
 
 **worker/**
 

@@ -15,6 +15,7 @@ import { FarmAdvice } from "./FarmAdvice";
 import AreaDialog from "./AreaDialog";
 import { useSheetSwipe } from "./useSheetSwipe";
 import GuideTour, { guideSeen, type GuideStep } from "./GuideTour";
+import TopNav from "./TopNav";
 import { classChanges, compareLayerId } from "@/lib/insights";
 import { loadSeen, newUpdates, saveSeen, updateKey, updatedOn, type Seen } from "@/lib/updates";
 
@@ -247,13 +248,11 @@ export default function Dashboard({ geo }: { geo: Gazetteer }) {
           <h1>{payload?.texts.title ?? "AMIA CAR MAPS"}</h1>
           <p>{payload ? `${payload.period.label} · as of ${fmtDate(payload.issued)}` : "DA-RFO-CAR · AMIA Program"}</p>
         </div>
+        <TopNav active="maps" activitiesHref={type ? `/activities?map=${type}` : "/activities"} />
         <button className="guide-btn" data-tour="help" onClick={openTour} aria-label="How to use this site">
           <span aria-hidden>?</span>
           <span className="guide-label">How to use</span>
         </button>
-        <nav className="toplinks">
-          <Link href="/about">About &amp; methodology</Link>
-        </nav>
       </header>
 
       <main className="body">

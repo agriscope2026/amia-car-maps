@@ -6,6 +6,7 @@ Endpoints
   GET  /templates/{kind}?period_start=YYYY-MM&period_end=YYYY-MM
   POST /preview/{type}            multipart: file (or drought/damage/crops [+ hvc, livestock] for ENVI) + settings
   POST /reference/{crops|irrigation}
+  POST /activities/parse          multipart: file → activities per municipality (validated, not stored)
   POST /jobs/{type}               same as preview + version_id → export job (queued, with progress)
   GET  /jobs/{id}                 status, progress, manifest, uploaded object paths
   GET  /jobs/{id}/files/{path}    download an export (local mode)
@@ -32,7 +33,7 @@ from pathlib import Path
 from fastapi import Depends, FastAPI, File, Form, Header, HTTPException, UploadFile
 from fastapi.responses import FileResponse, Response
 
-from . import droughtcaster, exports, pagasa_seasonal, rainfall_feed, reference, storage, templates
+from . import activities, droughtcaster, exports, pagasa_seasonal, rainfall_feed, reference, storage, templates
 from .envi import config
 from .products import (crop_advice, drought, envi_product, rainfall_dekad, rainfall_seasonal, recommend,
                        reference_layers)
@@ -156,6 +157,12 @@ async def reference_upload(kind: str, file: UploadFile = File(...), settings: st
     if kind == "irrigation":
         return reference_layers.build_irrigation(data, name, _settings(settings))
     raise HTTPException(404, f"Unknown reference layer '{kind}'")
+
+
+@app.post("/activities/parse", dependencies=[Depends(auth)])
+async def activities_parse(file: UploadFile = File(...)):
+    data, name = await _read(file)
+    return activities.parse(data, name)
 
 
 # --------------------------------------------------------------------- jobs ---

@@ -2,6 +2,7 @@ import "server-only";
 import { promises as fs } from "fs";
 import path from "path";
 import crypto from "crypto";
+import type { Activity } from "@/lib/activities";
 import type { CatalogEntry, CropsLayer, Payload } from "@/lib/types";
 import { slugFor, type AuditEntry, type Repo, type VersionRecord } from "./types";
 
@@ -17,6 +18,7 @@ interface LocalDb {
   crops: CropsLayer | null;
   irrigation: any | null;
   unpublishedDemo: string[];
+  activities?: Activity[];
 }
 
 async function readJson<T>(file: string, fallback: T): Promise<T> {
@@ -197,5 +199,39 @@ export const fileRepo: Repo = {
 
   async listAudit(limit) {
     return (await loadDb()).audit.slice(0, limit);
+  },
+
+  async listActivities() {
+    // activities saved before an activity could have several places carry one area_key
+    return ((await loadDb()).activities ?? []).map((a: any) =>
+      a.area_keys ? a : (({ area_key, ...rest }) => ({ ...rest, area_keys: [area_key] }))(a));
+  },
+
+  async addActivities(rows, actor, source, replace = false) {
+    const now = new Date().toISOString();
+    await saveDb((db) => {
+      const added = rows.map((r) => ({
+        ...r, id: crypto.randomUUID(), source, created_by: actor.email, created_at: now, updated_at: now,
+      }));
+      db.activities = [...(replace ? [] : (db.activities ?? [])), ...added];
+    });
+    return rows.length;
+  },
+
+  async updateActivity(id, row) {
+    await saveDb((db) => {
+      const a = db.activities?.find((x) => x.id === id) as any;
+      if (!a) throw new Error("Activity not found");
+      delete a.area_key;
+      Object.assign(a, row, { updated_at: new Date().toISOString() });
+    });
+  },
+
+  async deleteActivity(id) {
+    await saveDb((db) => {
+      const n = db.activities?.length ?? 0;
+      db.activities = (db.activities ?? []).filter((x) => x.id !== id);
+      if (db.activities.length === n) throw new Error("Activity not found");
+    });
   },
 };

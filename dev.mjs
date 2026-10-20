@@ -45,6 +45,21 @@ if (env.DATABASE_URL) {
   spawnSync(process.execPath, [join(WEB, "scripts", "localdb.mjs"), "migrate"], { stdio: "inherit" });
 }
 
+// the local admin login is DEV_ADMIN_EMAIL / DEV_ADMIN_PASSWORD from web/.env.local – with the local database it is
+// (re)set on every start, so the login printed below always works
+const ADMIN = { email: env.DEV_ADMIN_EMAIL || "admin@example.com", password: env.DEV_ADMIN_PASSWORD || "" };
+if (env.DATABASE_URL) {
+  if (ADMIN.password.length >= 8) {
+    const r = spawnSync(process.execPath, [join(WEB, "scripts", "localdb.mjs"), "add-user", ADMIN.email, ADMIN.password, "admin"],
+      { encoding: "utf-8" });
+    if (r.status !== 0) console.error(`Could not set the local admin login:\n${r.stderr || r.stdout}`);
+  } else {
+    console.warn("Set DEV_ADMIN_EMAIL and DEV_ADMIN_PASSWORD (8+ characters) in web/.env.local to fix the local admin login.");
+  }
+  // development only: sample activities while the list is empty (remove: cd web && node scripts/localdb.mjs activities-demo --clear)
+  spawnSync(process.execPath, [join(WEB, "scripts", "localdb.mjs"), "activities-demo", "--if-empty"], { stdio: "inherit" });
+}
+
 // ports 3000 (web) and 8001 (worker) must be free – usually they are held by an earlier `node dev.mjs` that is
 // still running (another terminal, or one closed without Ctrl+C). `node dev.mjs --restart` stops it first.
 const PORTS = { 3000: "web app", 8001: "worker" };
@@ -143,4 +158,5 @@ function shutdown() {
 process.on("SIGINT", shutdown);
 process.on("SIGTERM", shutdown);
 
-console.log("\nStarting… dashboard http://localhost:3000 · admin http://localhost:3000/admin (admin@example.com / admin-local-123)\nPress Ctrl+C to stop.\n");
+console.log("\nStarting… dashboard http://localhost:3000 · admin http://localhost:3000/admin"
+  + (ADMIN.password ? ` – login ${ADMIN.email} / ${ADMIN.password}` : "") + "\nPress Ctrl+C to stop.\n");

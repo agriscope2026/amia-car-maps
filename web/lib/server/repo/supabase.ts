@@ -1,5 +1,6 @@
 import "server-only";
 import { r2Configured } from "../r2";
+import type { Activity } from "@/lib/activities";
 import type { CropsLayer, Payload } from "@/lib/types";
 import { supabaseAdmin, supabasePublic } from "../supabase";
 import { slugFor, UUID_RE, valueRows, type Actor, type Repo, type VersionRecord } from "./types";
@@ -9,6 +10,9 @@ import { slugFor, UUID_RE, valueRows, type Actor, type Repo, type VersionRecord 
 const uid = (a: Actor) => (a.id && UUID_RE.test(a.id) ? a.id : null);
 const VERSION_SELECT =
   "id, product_id, version, status, title, settings, exports, created_at, published_at, period:payload->period, issued:payload->>issued, products!inner(type), author_p:profiles!product_versions_author_fkey(email), pub_p:profiles!product_versions_published_by_fkey(email)";
+
+const ACTIVITY_SELECT =
+  "id, area_keys, title, category, status, hazard, start_date, end_date, beneficiaries, budget, office, remarks, source, created_by:created_by_email, created_at, updated_at";
 
 function toVersion(r: any): VersionRecord {
   return {
@@ -199,5 +203,57 @@ export const supabaseRepo: Repo = {
   async listAudit(limit) {
     const { data } = await supabaseAdmin().from("audit_log").select("at, actor_email, action, entity, entity_id, details").order("at", { ascending: false }).limit(limit);
     return (data ?? []).map((r: any) => ({ ...r, actor: r.actor_email }));
+  },
+
+  async listActivities() {
+    const { data, error } = await supabasePublic().from("activities").select(ACTIVITY_SELECT)
+      .order("start_date", { nullsFirst: false }).order("title").limit(10000);
+    if (error) throw error;
+    return (data ?? []).map((r: any) => ({ ...r, budget: r.budget === null ? null : Number(r.budget) })) as Activity[];
+  },
+
+  async addActivities(rows, actor, source, replace = false) {
+    const sb = supabaseAdmin();
+    // not one transaction over the API: insert first, then remove the older rows, so a failed import leaves the old list
+    const before = replace ? new Date().toISOString() : null;
+    const ids: string[] = [];
+    try {
+      for (let i = 0; i < rows.length; i += 500) {
+        const ins = await sb.from("activities")
+          .insert(rows.slice(i, i + 500).map((r) => ({ ...r, source, created_by: uid(actor), created_by_email: actor.email })))
+          .select("id");
+        if (ins.error) throw ins.error;
+        ids.push(...(ins.data ?? []).map((r: any) => r.id));
+      }
+    } catch (e) {
+      for (let i = 0; i < ids.length; i += 500) await sb.from("activities").delete().in("id", ids.slice(i, i + 500));
+      throw e;
+    }
+    if (before) {
+      const { data: old, error } = await sb.from("activities").select("id").lt("created_at", before).limit(100000);
+      if (error) throw error;
+      const keep = new Set(ids);
+      const drop = (old ?? []).map((r: any) => r.id as string).filter((id) => !keep.has(id));
+      for (let i = 0; i < drop.length; i += 500) {
+        const del = await sb.from("activities").delete().in("id", drop.slice(i, i + 500));
+        if (del.error) throw del.error;
+      }
+    }
+    return rows.length;
+  },
+
+  async updateActivity(id, row) {
+    if (!UUID_RE.test(id)) throw new Error("Activity not found");
+    const { data, error } = await supabaseAdmin().from("activities")
+      .update({ ...row, updated_at: new Date().toISOString() }).eq("id", id).select("id");
+    if (error) throw error;
+    if (!data?.length) throw new Error("Activity not found");
+  },
+
+  async deleteActivity(id) {
+    if (!UUID_RE.test(id)) throw new Error("Activity not found");
+    const { data, error } = await supabaseAdmin().from("activities").delete().eq("id", id).select("id");
+    if (error) throw error;
+    if (!data?.length) throw new Error("Activity not found");
   },
 };

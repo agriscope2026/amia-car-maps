@@ -88,6 +88,7 @@ boundaries, legend presets) is in [`supabase/seed.sql`](../supabase/seed.sql).
 | `product_versions` | Draft → published → archived, with texts, settings, method, summary, payload, inputs, validation, exports, label report, author, publisher. |
 | `product_values` | Municipality × layer (month / season / dekad) × variable, **with unit**, class and colour. |
 | `submissions` | Optional field-office submissions (schema only, see status). |
+| `activities` | Activities in one or more municipalities (`area_keys text[]`, each checked against `gazetteer` by a trigger): status (to conduct / ongoing / completed / postponed), the map they respond to, dates, beneficiaries, budget (PHP), office. Public read; staff write. ([`0005`](../supabase/migrations/0005_activities.sql), [`0006`](../supabase/migrations/0006_activity_areas.sql)) |
 | `audit_log` | Logins, uploads, validation, edits, exports, publish / unpublish, reference updates. |
 
 Every table has row-level security: the public (`anon`) role can read only published versions and reference
@@ -112,6 +113,10 @@ Screenshots are in [`docs/img/`](img/).
   - recommendations;
   - share link;
   - about.
+- **Activities page (`/activities`).** A dashboard of the latest published map of the chosen type: the
+  municipalities in the "at risk" classes (worst month of an outlook by default), how many have an activity,
+  the gaps, and charts by status, province, map class, category and start month, then the list of municipalities
+  with their activities. The header's Maps / Activities / About buttons switch between the map and this page.
 - **Dashboard (≤ 820 px).** The panel becomes a bottom sheet with a handle that shows the current map. It was
   tested at 360 px.
 - **Admin.** A product list with versions and status, plus "create" buttons per type and the feed button.
@@ -119,7 +124,8 @@ Screenshots are in [`docs/img/`](img/).
     warnings, unmatched names with suggestions and "assign to") → live map preview → save draft.
   - The **version page** has: map, text editing (with "Generate automatically" for recommendations), export
     job progress and label check, downloads, publish/unpublish.
-  - There are also **Reference data** (crops, irrigation) and **Audit log** pages.
+  - There are also **Activities** (manual entry and Excel import through the worker's `/activities/parse`),
+    **Reference data** (crops, irrigation) and **Audit log** pages.
 
 ## 4. Open questions (§12): assumptions until confirmed
 

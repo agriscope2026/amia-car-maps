@@ -17,10 +17,12 @@ export function AdminBar({ email, role }: { email: string; role: string }) {
       </div>
       <nav className="row toplinks" style={{ display: "flex" }}>
         <Link href="/admin">Products</Link>
+        <Link href="/admin/activities">Activities</Link>
         {role === "admin" && <Link href="/admin/reference">Reference data</Link>}
         {role === "admin" && <Link href="/admin/audit">Audit log</Link>}
         {role === "admin" && <Link href="/admin/storage">Storage</Link>}
-        <Link href="/">Dashboard</Link>
+        <Link href="/">Maps</Link>
+        <Link href="/activities">Public activities</Link>
         <a
           href="#"
           onClick={async (e) => {

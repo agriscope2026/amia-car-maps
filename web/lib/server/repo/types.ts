@@ -1,3 +1,4 @@
+import type { Activity, ActivityInput } from "@/lib/activities";
 import type { CatalogEntry, CropsLayer, Payload, ProductType, Status } from "@/lib/types";
 
 export interface Actor {
@@ -64,6 +65,11 @@ export interface Repo {
   saveIrrigation(fc: any, serviceAreas: any | null): Promise<void>;
   audit(actor: Actor, action: string, entity?: string, entity_id?: string, details?: any): Promise<void>;
   listAudit(limit: number): Promise<AuditEntry[]>;
+  listActivities(): Promise<Activity[]>;
+  /** Add activities (all or none); with `replace`, every existing activity is removed first. Returns the count. */
+  addActivities(rows: ActivityInput[], actor: Actor, source: string, replace?: boolean): Promise<number>;
+  updateActivity(id: string, row: ActivityInput): Promise<void>;
+  deleteActivity(id: string): Promise<void>;
 }
 
 export function slugFor(type: ProductType, periodStart: string) {

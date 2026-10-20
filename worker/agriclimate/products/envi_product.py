@@ -63,7 +63,7 @@ def build(files: dict, settings: dict | None = None) -> dict:
     for i, c in enumerate(legend["classes"]):          # class ranges for the legend (retained on every map)
         c["lo"], c["hi"] = round(float(br[i]), 4), round(float(br[i + 1]), 4)
     series = t["envi_class"].where(t["envi"].notna())
-    lyr = common.layer("envi", "ENVI class", "envi_class", "class", legend, series.reindex(keys), extra)
+    lyr = common.layer("envi", "Whole season (average outlook)", "envi_class", "class", legend, series.reindex(keys), extra)
     for k, rec in lyr["values"].items():   # the class is the label; keep the index value too
         v = t["envi"].get(k)
         rec["envi"] = None if v is None or pd.isna(v) else round(float(v), 3)

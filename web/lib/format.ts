@@ -38,6 +38,21 @@ export function defaultLayer(_type: ProductType, layers: { id: string }[]): stri
   return layers[0]?.id;
 }
 
+/** The ENVI season map in everyday words: it averages the outlook over the whole season (older issues call it
+ * "ENVI class"). */
+export const ENVI_SEASON_LABEL = "Whole season (average outlook)";
+export function layerLabel(id: string, label: string): string {
+  return id === "envi" && /^envi class$/i.test(label.trim()) ? ENVI_SEASON_LABEL : label;
+}
+/** Payload or catalog entry with the friendly layer names. */
+export function withLayerLabels<P extends { layers: { id: string; label: string }[]; downloads?: { group?: string; layer?: string }[] }>(p: P): P {
+  return {
+    ...p,
+    layers: p.layers.map((l) => ({ ...l, label: layerLabel(l.id, l.label) })),
+    ...(p.downloads ? { downloads: p.downloads.map((d) => (d.group ? { ...d, group: layerLabel(d.layer ?? "envi", d.group) } : d)) } : {}),
+  };
+}
+
 /** 10-day / season total maps are no longer shown; older issues still carry them, so they are dropped on load
  * (unless a total is the only map, e.g. a 10-day upload without daily values). */
 export const TOTAL_LAYERS = ["total", "season_total"];

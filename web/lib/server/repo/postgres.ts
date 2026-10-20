@@ -1,6 +1,7 @@
 import "server-only";
+import type { Activity } from "@/lib/activities";
 import type { CatalogEntry, CropsLayer, Payload } from "@/lib/types";
-import { q, tx } from "../db";
+import { pool, q, tx } from "../db";
 import { slugFor, UUID_RE, valueRows, type Actor, type AuditEntry, type Repo, type VersionRecord } from "./types";
 
 /** PostgreSQL + PostGIS back end (the local development database, or a self-hosted server). */
@@ -10,6 +11,11 @@ const VERSION_COLS = `v.id, v.product_id, p.type, v.version, v.status, v.title, 
   pb.email as published_by, v.payload->'period' as period, v.payload->>'issued' as issued`;
 const VERSION_FROM = `product_versions v join products p on p.id = v.product_id
   left join profiles a on a.id = v.author left join profiles pb on pb.id = v.published_by`;
+
+const ACTIVITY_COLS = `id, area_keys, title, category, status, hazard, start_date, end_date, beneficiaries, budget, office,
+  remarks, source, created_by_email as created_by, created_at, updated_at`;
+const ACTIVITY_FIELDS = ["area_keys", "title", "category", "status", "hazard", "start_date", "end_date", "beneficiaries",
+  "budget", "office", "remarks"] as const;
 
 const uid = (a: Actor) => (a.id && UUID_RE.test(a.id) ? a.id : null);
 
@@ -197,5 +203,38 @@ export const postgresRepo: Repo = {
       `select at, actor_email as actor, action, entity, entity_id, details from audit_log order by at desc limit $1`,
       [limit],
     );
+  },
+
+  async listActivities() {
+    return q<Activity>(`select ${ACTIVITY_COLS} from activities order by start_date nulls last, title`);
+  },
+
+  async addActivities(rows, actor, source, replace = false) {
+    await tx(async (c) => {
+      if (replace) await c.query(`delete from activities`);
+      await c.query(
+        `insert into activities (${ACTIVITY_FIELDS.join(", ")}, source, created_by, created_by_email)
+         select ${ACTIVITY_FIELDS.join(", ")}, $2, $3, $4
+         from jsonb_to_recordset($1::jsonb) as x(area_keys text[], title text, category text, status text, hazard text,
+           start_date date, end_date date, beneficiaries int, budget numeric, office text, remarks text)`,
+        [JSON.stringify(rows), source, uid(actor), actor.email],
+      );
+    });
+    return rows.length;
+  },
+
+  async updateActivity(id, row) {
+    if (!UUID_RE.test(id)) throw new Error("Activity not found");
+    const r = await pool().query(
+      `update activities set ${ACTIVITY_FIELDS.map((f, i) => `${f} = $${i + 2}`).join(", ")}, updated_at = now() where id = $1`,
+      [id, ...ACTIVITY_FIELDS.map((f) => row[f])],
+    );
+    if (!r.rowCount) throw new Error("Activity not found");
+  },
+
+  async deleteActivity(id) {
+    if (!UUID_RE.test(id)) throw new Error("Activity not found");
+    const r = await pool().query(`delete from activities where id = $1`, [id]);
+    if (!r.rowCount) throw new Error("Activity not found");
   },
 };

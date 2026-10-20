@@ -7,17 +7,19 @@
 //   node scripts/localdb.mjs demo                  refresh only the demo products (keeps your own work)
 //   node scripts/localdb.mjs migrate               apply new migrations to an existing database (keeps your data)
 //   node scripts/localdb.mjs add-user <email> <password> [editor|admin]
+//   node scripts/localdb.mjs activities-demo [--clear]  sample activities for development (or remove them)
 //   node scripts/localdb.mjs psql                  print the psql command line
 //
 // Env: PG_HOME (default C:/Program Files/PostgreSQL/17), LOCALDB_PORT (54329),
 //      LOCALDB_ADMIN_EMAIL / LOCALDB_ADMIN_PASSWORD (default admin@example.com / admin-local-123).
-import { spawnSync } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 import { cpSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync, createWriteStream } from "node:fs";
 import { join, resolve } from "node:path";
 import { Readable } from "node:stream";
 import { pipeline } from "node:stream/promises";
 import crypto from "node:crypto";
 import pg from "pg";
+import { clearSampleActivities, seedSampleActivities } from "./sample-activities.mjs";
 
 const REPO = resolve(import.meta.dirname, "..", "..");
 const HOME = join(REPO, ".localdb");
@@ -82,10 +84,36 @@ function status() {
   return r.status === 0;
 }
 
-function start() {
+/** Windows: postgres processes of this local copy left behind by a crashed server (their parent is gone) keep the
+ * shared memory and block the next start ("pre-existing shared memory block is still in use"). Stop them – only
+ * processes started from .localdb/pgsql, never an installed PostgreSQL service. */
+function stopOrphans() {
+  if (process.platform !== "win32") return;
+  const norm = (p) => p.trim().replaceAll("\\", "/").toLowerCase();
+  const bin = norm(exe("postgres"));
+  const r = run("powershell.exe", ["-NoProfile", "-Command",
+    "Get-CimInstance Win32_Process -Filter \"Name='postgres.exe'\" | ForEach-Object { \"$($_.ProcessId)|$($_.ExecutablePath)\" }"],
+    { quiet: true, allowFail: true });
+  const pids = (r.stdout ?? "").split("\n").map((l) => l.split("|"))
+    .filter(([pid, path]) => pid && path && norm(path) === bin).map(([pid]) => pid.trim());
+  if (!pids.length) return;
+  console.log(`Stopping ${pids.length} leftover postgres process(es) of a crashed local server …`);
+  for (const pid of pids) run("taskkill", ["/PID", pid, "/F"], { quiet: true, allowFail: true });
+}
+
+async function start() {
   if (status()) return console.log(`Already running on port ${PORT}.`);
-  // stdio must not be piped: the server inherits the handles and spawnSync would wait for it to exit
-  run(exe("pg_ctl"), ["-D", DATA, "-l", LOG, "-w", "start"], { stdio: "ignore" });
+  stopOrphans();
+  // Windows: windowsHide + stdio "ignore" start pg_ctl with its own console that has no window (CREATE_NO_WINDOW);
+  // the server inherits it. So Ctrl+C in the terminal (e.g. stopping dev.mjs) does not reach the server, and there is
+  // no window to close by mistake – either would kill the postgres processes mid-query. (detached: true would open
+  // a new, closable terminal window instead.) stdio must not be piped: the server would inherit the pipes.
+  const code = await new Promise((resolve, reject) => {
+    const p = spawn(exe("pg_ctl"), ["-D", DATA, "-l", LOG, "-w", "start"], { stdio: "ignore", windowsHide: true });
+    p.on("error", reject);
+    p.on("exit", resolve);
+  });
+  if (code !== 0) throw new Error(`pg_ctl start failed (${code}) – see ${LOG}`);
   console.log(`Local database running: ${DATABASE_URL}`);
 }
 
@@ -216,7 +244,7 @@ export async function insertValues(c, versionId, p) {
 }
 
 async function reset(withDemo) {
-  if (!status()) start();
+  if (!status()) await start();
   const admin = await connect("postgres");
   await admin.query(`drop database if exists ${DB} with (force)`);
   await admin.query(`create database ${DB}`);
@@ -232,16 +260,24 @@ async function reset(withDemo) {
   await c.query(sql("supabase/seed.sql"));
   const n = (await c.query("select (select count(*) from gazetteer) g, (select count(*) from boundaries) b, (select postgis_lib_version()) v")).rows[0];
   console.log(`  gazetteer ${n.g} municipalities, ${n.b} boundaries, PostGIS ${n.v}`);
-  if (withDemo) await loadDemo(c);
+  if (withDemo) {
+    await loadDemo(c);
+    await sampleActivities(c);
+  }
   await addUser(c, process.env.LOCALDB_ADMIN_EMAIL ?? "admin@example.com", process.env.LOCALDB_ADMIN_PASSWORD ?? "admin-local-123", "admin");
   await c.end();
   console.log(`\nDatabase ready. In web/.env.local set:\n  DATABASE_URL=${DATABASE_URL}`);
 }
 
+async function sampleActivities(c) {
+  const r = await seedSampleActivities(c, REPO);
+  console.log(`  ${r.count} sample activities in ${r.places} municipalities (development only; ${r.atRisk} at high ENVI risk)`);
+}
+
 const [cmd, ...args] = process.argv.slice(2);
 try {
   if (cmd === "setup") await setup();
-  else if (cmd === "start") start();
+  else if (cmd === "start") await start();
   else if (cmd === "stop") stop();
   else if (cmd === "status") console.log(status() ? `running on port ${PORT} – ${DATABASE_URL}` : "stopped");
   else if (cmd === "reset") await reset(!args.includes("--no-demo"));
@@ -277,8 +313,16 @@ try {
     const c = await connect();
     await addUser(c, args[0], args[1], args[2]);
     await c.end();
+  } else if (cmd === "activities-demo") {
+    // sample activities for local development (--clear removes them, --if-empty only fills an empty list)
+    const c = await connect();
+    if (args.includes("--clear")) console.log(`Removed ${await clearSampleActivities(c)} sample activities.`);
+    else if (args.includes("--if-empty") && Number((await c.query("select count(*) n from activities")).rows[0].n) > 0) {
+      /* the list already has activities: leave it */
+    } else await sampleActivities(c);
+    await c.end();
   } else if (cmd === "psql") console.log(`"${exe("psql")}" -p ${PORT} -U postgres ${DB}`);
-  else console.log("Commands: setup | start | stop | status | reset [--no-demo] | demo | add-user <email> <password> [role] | psql");
+  else console.log("Commands: setup | start | stop | status | reset [--no-demo] | demo | activities-demo [--clear] | add-user <email> <password> [role] | psql");
 } catch (e) {
   console.error(e.message);
   process.exit(1);
