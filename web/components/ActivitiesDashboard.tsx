@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
-  ACTIVITY_STATUSES, coverage, defaultVulnerableClasses, emptyCounts, inAny, placesSummary,
+  ACTIVITY_STATUSES, beneficiariesText, coverage, defaultVulnerableClasses, emptyCounts, inAny, placesSummary,
   worstClasses,
   type Activity, type StatusCounts,
 } from "@/lib/activities";
@@ -558,9 +558,11 @@ export default function ActivitiesDashboard({ geo }: { geo: Gazetteer }) {
               </div>
               <div className="ad-kpi">
                 <span className="ad-kpi-icon"><Icon name="people" /></span>
-                <span className="ad-kpi-v">{fmtNumber(cov.beneficiaries, 0)}</span>
+                <span className="ad-kpi-v">{fmtNumber(cov.farmers, 0)}</span>
                 <span className="ad-kpi-k">Farmers reached</span>
-                <span className="ad-kpi-s">beneficiaries</span>
+                <span className="ad-kpi-s">
+                  {cov.fcas ? `and ${fmtNumber(cov.fcas, 0)} farmer group${cov.fcas === 1 ? "" : "s"} (FCA)` : "individual beneficiaries"}
+                </span>
               </div>
               <div className="ad-kpi">
                 <span className="ad-kpi-icon"><Icon name="peso" /></span>
@@ -700,7 +702,8 @@ export default function ActivitiesDashboard({ geo }: { geo: Gazetteer }) {
                                     <strong>{a.title}</strong>
                                     <div className="ad-meta">
                                       {[a.category, dateRange(a), a.office,
-                                        a.beneficiaries != null && `${fmtNumber(a.beneficiaries, 0)} farmers`,
+                                        a.units != null && `${fmtNumber(a.units, 0)} unit${a.units === 1 ? "" : "s"}`,
+                                        beneficiariesText(a.beneficiaries, a.beneficiary_type),
                                         a.budget != null && `₱${fmtNumber(a.budget, 0)}`]
                                         .filter(Boolean).map((x, i) => <span key={i}>{x}</span>)}
                                     </div>

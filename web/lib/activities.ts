@@ -23,6 +23,22 @@ export const ACTIVITY_HAZARDS = [
 ] as const;
 export type ActivityHazard = (typeof ACTIVITY_HAZARDS)[number]["id"];
 
+/** Who benefits: individual farmers or farmer groups (farmer cooperatives and associations, FCA); `beneficiaries`
+ * is the count of farmers or of FCAs. */
+export const BENEFICIARY_TYPES = [
+  { id: "individual", label: "Individual farmers", unit: "farmers", one: "farmer" },
+  { id: "fca", label: "Farmer group (FCA)", unit: "FCAs", one: "FCA" },
+] as const;
+export type BeneficiaryType = (typeof BENEFICIARY_TYPES)[number]["id"];
+
+/** "250 farmers", "3 FCAs", "1 FCA", or "250 beneficiaries" when the type is not given. */
+export function beneficiariesText(n: number | null, type: BeneficiaryType | null): string {
+  if (n == null) return "";
+  const t = BENEFICIARY_TYPES.find((b) => b.id === type);
+  const word = t ? (n === 1 ? t.one : t.unit) : n === 1 ? "beneficiary" : "beneficiaries";
+  return `${n.toLocaleString("en-PH")} ${word}`;
+}
+
 export const statusLabel = (s: string) => ACTIVITY_STATUSES.find((x) => x.id === s)?.label ?? s;
 export const hazardLabel = (h: string) => ACTIVITY_HAZARDS.find((x) => x.id === h)?.label ?? h;
 
@@ -35,7 +51,9 @@ export interface Activity {
   hazard: ActivityHazard;
   start_date: string | null; // YYYY-MM-DD
   end_date: string | null;
-  beneficiaries: number | null; // farmers reached
+  units: number | null; // units delivered, e.g. 3 (PISOS), 1 (solar-powered irrigation system)
+  beneficiary_type: BeneficiaryType | null; // individual farmers or farmer groups (FCA)
+  beneficiaries: number | null; // count of farmers, or of FCAs
   budget: number | null; // PHP
   office: string | null; // implementing office / unit
   remarks: string | null;
@@ -79,6 +97,11 @@ export const activityInput = z
     hazard: z.enum(ACTIVITY_HAZARDS.map((h) => h.id) as [ActivityHazard, ...ActivityHazard[]]).default("general"),
     start_date: date,
     end_date: date,
+    units: amount,
+    beneficiary_type: z
+      .enum(BENEFICIARY_TYPES.map((b) => b.id) as [BeneficiaryType, ...BeneficiaryType[]])
+      .nullish()
+      .transform((t) => t ?? null),
     beneficiaries: amount.transform((n) => (n === null ? null : Math.round(n))),
     budget: amount,
     office: text(200),
@@ -92,7 +115,7 @@ export type ActivityInput = z.output<typeof activityInput>;
 
 const FIELD_NAMES: Record<string, string> = {
   area_keys: "Places", title: "Activity", category: "Category", status: "Status", hazard: "Map", start_date: "Start date",
-  end_date: "End date", beneficiaries: "Beneficiaries", budget: "Budget", office: "Office", remarks: "Remarks",
+  end_date: "End date", units: "No. of units", beneficiary_type: "Beneficiary type", beneficiaries: "Beneficiaries", budget: "Budget", office: "Office", remarks: "Remarks",
 };
 
 /** First validation message of a zod error, e.g. "title: Enter the activity." */
@@ -186,6 +209,8 @@ export interface Coverage {
   gaps: string[]; // vulnerable areas without one
   counts: StatusCounts; // activities in (at least one of) the vulnerable areas, each counted once
   beneficiaries: number; // of those activities (an activity in several places counts once, in full)
+  farmers: number; // … of which individual farmers (and beneficiaries of unknown type)
+  fcas: number; // … of which farmer groups (FCA)
   budget: number;
 }
 
@@ -194,6 +219,8 @@ export function coverage(vulnerable: string[], acts: Activity[]): Coverage {
   const counts = emptyCounts();
   const active = new Set<string>();
   let beneficiaries = 0;
+  let farmers = 0;
+  let fcas = 0;
   let budget = 0;
   for (const a of acts) {
     const here = a.area_keys.filter((k) => set.has(k));
@@ -201,6 +228,8 @@ export function coverage(vulnerable: string[], acts: Activity[]): Coverage {
     counts[a.status] += 1;
     if (a.status !== "postponed") for (const k of here) active.add(k);
     beneficiaries += a.beneficiaries ?? 0;
+    if (a.beneficiary_type === "fca") fcas += a.beneficiaries ?? 0;
+    else farmers += a.beneficiaries ?? 0;
     budget += a.budget ?? 0;
   }
   return {
@@ -209,6 +238,8 @@ export function coverage(vulnerable: string[], acts: Activity[]): Coverage {
     gaps: vulnerable.filter((k) => !active.has(k)),
     counts,
     beneficiaries,
+    farmers,
+    fcas,
     budget,
   };
 }

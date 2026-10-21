@@ -240,7 +240,7 @@ the admin home page. The portal reads PAGASA's bulletin page and makes a draft w
   in brackets, "the rest of …" and Baguio City), shown on a CAR map;
 - whether PAGASA's gust and heavy-rain outlook names CAR;
 - the **forecast track** (centre positions from the bulletin PDF, each with its category), drawn like PAGASA's track
-  map: the yellow **area with strong winds or higher** around the present centre ("strong to typhoon-force winds
+  map on the dashboard (and on the exports when PAGASA's image cannot be downloaded): the yellow **area with strong winds or higher** around the present centre ("strong to typhoon-force winds
   extend outwards up to 780 km"), the red **area with storm-force winds** (not in the bulletin text: measured on
   PAGASA's track image against the yellow circle), the **forecast cone** (approximate – drawn from typical forecast
   track errors, as PAGASA does not publish its cone as numbers), the PAR line, and how close the storm comes to CAR;
@@ -252,12 +252,12 @@ Then edit the texts if needed, generate the exports and publish, as with the oth
 The exports are:
 
 - **One A4 page for printing (PDF and PNG)**, with the DA-RFO-CAR / AMIA letterhead and everything on one sheet:
-  the storm, the track map (PAGASA's style, with CAR coloured by wind signal and a zoomed CAR inset), position / movement / strength / closest
+  the storm, PAGASA's original track and intensity forecast image beside the CAR wind-signal map, position / movement / strength / closest
   approach, the CAR areas under each signal, the heavy rainfall for CAR, what farmers should do – now, during
   and after the storm – and the crop and livestock advice. In photo mode it is the **Print format** view.
 - **Facebook posts** (4:5, 2160 × 2700 px, the size Facebook shows without cropping), with no title page so the track
-  is the first thing people see: (1) the advisory – one map with the track, cone, wind circles and CAR by wind
-  signal, its key, and the summary; (2) what farmers should do now; (3) during and after the storm; (4) crop and livestock advice (rice,
+  is the first thing people see: (1) the advisory – PAGASA's track image beside the CAR wind-signal map with every
+  signal class, and the summary; (2) what farmers should do now; (3) during and after the storm; (4) crop and livestock advice (rice,
   corn, high-value crops, livestock).
 
 The farm advice is drafted from the situation: the wind signal, PAGASA's **Weather Advisory** (forecast rain per day
@@ -353,7 +353,9 @@ seed distribution, trainings, water-system repairs or insurance enrolment. Each 
   province-wide forum or a region-wide campaign is still *one* activity, so its farmers and budget are counted once);
 - the **activity** itself and an optional **category** (Training, Distribution of inputs, Infrastructure …);
 - the **status**: *To conduct*, *Ongoing*, *Completed* or *Postponed*;
-- optional start and end dates, number of farmer beneficiaries, budget (PHP), implementing office and remarks.
+- optional start and end dates, number of units (e.g. 3 PISOS), the beneficiaries – individual farmers or farmer
+  groups (FCA, farmer cooperatives and associations) and how many – budget (PHP, in full), implementing office and
+  remarks.
 
 Two ways to enter them:
 

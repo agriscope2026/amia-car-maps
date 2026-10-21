@@ -79,10 +79,8 @@ creates or updates this admin in the local database on every start and prints it
 (`db:reset` on its own creates admin@example.com / admin-local-123, or `LOCALDB_ADMIN_EMAIL` / `LOCALDB_ADMIN_PASSWORD`.)
 
 - Add more users with `npm run db:user -- someone@da.gov.ph <password> editor` (or `admin`).
-- **Sample activities (development only):** `db:reset` and `node dev.mjs` (when the list is empty) add about 80
-  made-up activities, tagged `sample (dev)`, so the El Niño Action Plan Dashboard has something to show. Remove them with
-  `node scripts/localdb.mjs activities-demo --clear`, or make a fresh set with `node scripts/localdb.mjs activities-demo`.
-  They are never in the migrations or `seed.sql`, so production never gets them.
+- **Activities:** none are added automatically. Upload a list in Admin → Activities (Excel, see its template) or
+  encode them by hand.
 - Open psql with the command printed by `node scripts/localdb.mjs psql`.
 - Run `db:reset` again whenever you want a clean database.
 - After pulling changes that add database migrations, run `npm run db:migrate` (`node dev.mjs` does it for you).

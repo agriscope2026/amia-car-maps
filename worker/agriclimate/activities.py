@@ -32,6 +32,15 @@ HAZARDS = {
     "tc_advisory": ["TYPHOON", "SUPER TYPHOON", "TROPICAL CYCLONE", "TC", "STORM", "TROPICAL STORM", "BAGYO",
                     "WIND SIGNAL", "TCWS", "FARM WEATHER OUTLOOK"],
 }
+BENEFICIARY_TYPES = {
+    "individual": ["INDIVIDUAL", "INDIVIDUALS", "INDIVIDUAL FARMER", "INDIVIDUAL FARMERS", "FARMER", "FARMERS",
+                   "PERSON", "PERSONS", "HOUSEHOLD", "HOUSEHOLDS", "IND"],
+    "fca": ["FCA", "FCAS", "GROUP", "GROUPS", "FARMER GROUP", "FARMERS GROUP", "FARMER GROUPS", "COOPERATIVE",
+            "COOPERATIVES", "COOP", "ASSOCIATION", "ASSOCIATIONS", "FARMER ASSOCIATION", "FARMERS ASSOCIATION",
+            "FARMER COOPERATIVE", "FARMERS COOPERATIVE", "FARMER COOPERATIVE AND ASSOCIATION",
+            "FARMER COOPERATIVES AND ASSOCIATIONS", "FARMERS COOPERATIVES AND ASSOCIATIONS", "ORGANIZATION",
+            "ORGANIZATIONS", "IA", "IRRIGATORS ASSOCIATION", "GROUP FCA", "GROUP (FCA)"],
+}
 COLUMNS = {   # field → accepted headers (normalized: upper case, single spaces, "_" as space)
     "title": ["ACTIVITY", "ACTIVITIES", "ACTIVITY NAME", "TITLE", "INTERVENTION", "INTERVENTIONS", "PROJECT",
               "PROGRAM ACTIVITY", "PROGRAM/ACTIVITY", "PROGRAMS/ACTIVITIES", "PPA", "PAP"],
@@ -40,6 +49,10 @@ COLUMNS = {   # field → accepted headers (normalized: upper case, single space
     "hazard": ["MAP", "HAZARD", "FOR MAP", "RESPONDS TO", "RESPONSE TO", "RISK"],
     "start_date": ["START DATE", "START", "DATE START", "DATE STARTED", "FROM", "DATE", "TARGET DATE", "SCHEDULE"],
     "end_date": ["END DATE", "END", "DATE END", "DATE COMPLETED", "TO", "UNTIL"],
+    "units": ["NO. OF UNITS", "NO OF UNITS", "NUMBER OF UNITS", "UNITS", "UNIT COUNT", "QUANTITY", "QTY",
+              "NO. OF UNIT", "NO OF UNIT"],
+    "beneficiary_type": ["BENEFICIARY TYPE", "TYPE OF BENEFICIARY", "TYPE OF BENEFICIARIES", "BENEFICIARIES TYPE",
+                         "BENEFICIARY", "INDIVIDUAL OR GROUP", "INDIVIDUAL/GROUP", "INDIVIDUAL / GROUP"],
     "beneficiaries": ["BENEFICIARIES", "NO OF BENEFICIARIES", "NO. OF BENEFICIARIES", "FARMERS", "NO OF FARMERS",
                       "NO. OF FARMERS", "TARGET BENEFICIARIES", "FARMER BENEFICIARIES"],
     "budget": ["BUDGET", "BUDGET PHP", "BUDGET (PHP)", "AMOUNT", "COST", "FUND", "ALLOCATION", "BUDGET_PHP"],
@@ -47,8 +60,8 @@ COLUMNS = {   # field → accepted headers (normalized: upper case, single space
                "AGENCY", "IMPLEMENTER", "PROPONENT"],
     "remarks": ["REMARKS", "NOTES", "NOTE", "COMMENTS", "DESCRIPTION", "DETAILS"],
 }
-TEMPLATE_COLUMNS = ["PROVINCE", "MUNICIPALITY", "ACTIVITY", "CATEGORY", "STATUS", "MAP", "START_DATE", "END_DATE",
-                    "BENEFICIARIES", "BUDGET_PHP", "OFFICE", "REMARKS"]
+TEMPLATE_COLUMNS = ["PROVINCE", "MUNICIPALITY", "ACTIVITY", "NO. OF UNITS", "CATEGORY", "STATUS", "START_DATE",
+                    "END_DATE", "BENEFICIARY_TYPE", "BENEFICIARIES", "BUDGET_PHP", "OFFICE", "REMARKS"]
 TEMPLATE_NOTES = [
     "Activities per municipality – one row per activity. Required: MUNICIPALITY, ACTIVITY and STATUS.",
     "MUNICIPALITY: the municipality or city; PROVINCE helps when two places have similar names. One activity in "
@@ -56,21 +69,24 @@ TEMPLATE_NOTES = [
     "Province-wide: write All in MUNICIPALITY and the province in PROVINCE (several provinces: Abra; Benguet). "
     "Whole CAR: All in both.",
     "STATUS: To conduct, Ongoing, Completed or Postponed.",
-    "MAP: the map the activity responds to – ENVI, Drought, 10-day rainfall, Seasonal rainfall, or General (blank = "
-    "General, shown with every map).",
+    "NO. OF UNITS: how many units are delivered, e.g. 3 PISOS or 1 solar-powered irrigation system (numbers only).",
     "CATEGORY: free text, e.g. Training, Distribution of inputs, Infrastructure, Advisory, Insurance enrolment.",
     "START_DATE / END_DATE: dates (YYYY-MM-DD or an Excel date). A month (YYYY-MM) is read as its first day.",
-    "BENEFICIARIES: number of farmers reached. BUDGET_PHP: amount in Philippine pesos (numbers only).",
+    "BENEFICIARY_TYPE: Individual (farmers) or FCA (farmer group – farmer cooperative or association). "
+    "BENEFICIARIES: how many – number of farmers, or number of FCAs.",
+    "BUDGET_PHP: amount in Philippine pesos, in full (e.g. 2837423, not 2,837.423 thousand) – numbers only.",
+    "Optional extra column MAP: the map the activity responds to – ENVI, Drought, 10-day rainfall, Seasonal rainfall, "
+    "or General (blank = General, shown with every map).",
     "OFFICE: implementing office or unit (e.g. DA-RFO-CAR AMIA, PAO Benguet, MAO La Trinidad). REMARKS: free text.",
     "Title rows above the header are fine. Delete the example rows before uploading.",
 ]
 EXAMPLES = [
-    ["Abra", "Bangued", "Distribution of drought-tolerant rice seeds", "Distribution of inputs", "Ongoing", "ENVI",
-     "2026-10-15", "2026-11-30", 250, 375000, "DA-RFO-CAR AMIA", "Example row – delete before uploading"],
-    ["Benguet", "La Trinidad; Tublay", "Farm weather advisory briefing", "Advisory", "To conduct", "General",
-     "2026-11-05", "", 80, "", "PAO Benguet", "Example row – delete before uploading"],
-    ["Ifugao; Kalinga", "All", "PCIC crop insurance enrolment drive", "Insurance enrolment", "To conduct", "ENVI",
-     "2026-12-01", "2027-01-31", 1500, 600000, "PCIC with DA-RFO-CAR", "Example row – delete before uploading"],
+    ["Abra", "Bangued", "Provision of PISOS", 2, "Distribution of inputs", "Completed", "2026-03-01", "2026-05-30",
+     "Individual", 2, 160000, "DA-RFO-CAR HVCDP", "Example row – delete before uploading"],
+    ["Kalinga", "Tabuk City", "Solar-powered irrigation system", 1, "Distribution of inputs", "To conduct",
+     "2026-11-15", "", "FCA", 1, 2611813, "DA-RFO-CAR Corn", "Example row – delete before uploading"],
+    ["Ifugao; Kalinga", "All", "PCIC crop insurance enrolment drive", "", "Insurance enrolment", "To conduct",
+     "2026-12-01", "2027-01-31", "Individual", 1500, 600000, "PCIC with DA-RFO-CAR", "Example row – delete before uploading"],
 ]
 
 
@@ -213,10 +229,18 @@ def parse(src, filename: str) -> dict:
             start = _date(r[cols["start_date"]]) if "start_date" in cols else None
             end = _date(r[cols["end_date"]]) if "end_date" in cols else None
             ben = _number(r[cols["beneficiaries"]], "beneficiaries") if "beneficiaries" in cols else None
+            units = _number(r[cols["units"]], "no. of units") if "units" in cols else None
             budget = _number(r[cols["budget"]], "budget") if "budget" in cols else None
         except ValueError as e:
             rep["errors"].append(f"Row {n}: {e}.")
             continue
+        ben_type = None
+        if "beneficiary_type" in cols and not _blank(r[cols["beneficiary_type"]]):
+            ben_type = _choice(r[cols["beneficiary_type"]], BENEFICIARY_TYPES)
+            if ben_type is None:
+                rep["errors"].append(f"Row {n}: BENEFICIARY_TYPE '{r[cols['beneficiary_type']]}' – use Individual or FCA "
+                                     "(farmer group).")
+                continue
         if start and end and end < start:
             rep["errors"].append(f"Row {n}: the end date {end} is before the start date {start}.")
             continue
@@ -253,7 +277,8 @@ def parse(src, filename: str) -> dict:
         if bad or not keys:
             continue
         rows.append({"title": title, "category": _text(r[cols["category"]], 100) if "category" in cols else None,
-                     "status": status, "hazard": hazard, "start_date": start, "end_date": end,
+                     "status": status, "hazard": hazard, "start_date": start, "end_date": end, "units": units,
+                     "beneficiary_type": ben_type,
                      "beneficiaries": None if ben is None else int(round(ben)), "budget": budget,
                      "office": _text(r[cols["office"]], 200) if "office" in cols else None,
                      "remarks": _text(r[cols["remarks"]], 1000) if "remarks" in cols else None, "row": n,

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { activitiesFor, activityInput, coverage, defaultVulnerableClasses, placesSummary, worstClasses, type Activity } from "../lib/activities";
+import { activitiesFor, activityInput, beneficiariesText, coverage, defaultVulnerableClasses, placesSummary, worstClasses, type Activity } from "../lib/activities";
 import type { Layer } from "../lib/types";
 
 const legend = (kind: "categorical" | "graduated", labels: string[]) => ({
@@ -12,7 +12,7 @@ const layer = (id: string, values: Record<string, string>, labels = ["Not affect
 });
 const act = (area: string | string[], status: Activity["status"], hazard: Activity["hazard"] = "general", extra: Partial<Activity> = {}): Activity => ({
   id: Math.random().toString(), area_keys: Array.isArray(area) ? area : [area], title: "x", category: null, status, hazard, start_date: null, end_date: null,
-  beneficiaries: null, budget: null, office: null, remarks: null, source: null, created_by: null, created_at: "", updated_at: "",
+  units: null, beneficiary_type: null, beneficiaries: null, budget: null, office: null, remarks: null, source: null, created_by: null, created_at: "", updated_at: "",
   ...extra,
 });
 
@@ -96,5 +96,29 @@ describe("places summary", () => {
     expect(placesSummary(towns.map((t) => t.area_key), towns)).toBe("Whole CAR (all 5 municipalities)");
     expect(placesSummary(["B|1", "B|2", "B|3", "A|1"], [...towns, { area_key: "B|4", name: "Kapangan", province: "Benguet" }], 2))
       .toBe("Abra: Bangued · Benguet: Itogon + 2 more");
+  });
+});
+
+describe("beneficiaries: individual farmers or farmer groups (FCA)", () => {
+  it("counts farmers and FCAs apart, and words them", () => {
+    const acts = [
+      act("ABRA|BANGUED", "completed", "general", { beneficiaries: 2, beneficiary_type: "individual", units: 2 }),
+      act("ABRA|BANGUED", "to_conduct", "general", { beneficiaries: 1, beneficiary_type: "fca", units: 1 }),
+      act("ABRA|BANGUED", "ongoing", "general", { beneficiaries: 5 }),
+    ];
+    const c = coverage(["ABRA|BANGUED"], acts);
+    expect([c.beneficiaries, c.farmers, c.fcas]).toEqual([8, 7, 1]);
+    expect(beneficiariesText(3, "fca")).toBe("3 FCAs");
+    expect(beneficiariesText(1, "fca")).toBe("1 FCA");
+    expect(beneficiariesText(250, "individual")).toBe("250 farmers");
+    expect(beneficiariesText(5, null)).toBe("5 beneficiaries");
+    expect(beneficiariesText(null, "fca")).toBe("");
+  });
+
+  it("accepts units and the beneficiary type on input", () => {
+    const a = activityInput.parse({ area_keys: ["ABRA|BANGUED"], title: "Provision of PISOS", status: "completed", units: 2,
+      beneficiary_type: "fca", beneficiaries: 1 });
+    expect([a.units, a.beneficiary_type, a.beneficiaries]).toEqual([2, "fca", 1]);
+    expect(activityInput.safeParse({ area_keys: ["ABRA|BANGUED"], title: "x", status: "completed", beneficiary_type: "group" }).success).toBe(false);
   });
 });

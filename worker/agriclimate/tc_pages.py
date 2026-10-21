@@ -70,6 +70,33 @@ def _section_color(head: str) -> tuple:
 
 # ------------------------------------------------------------------- pieces ---
 
+def track_image(payload: dict, out_dir: Path) -> Path | None:
+    """PAGASA's track and intensity forecast image (the one on the bulletin page), downloaded once per export."""
+    url = (payload.get("tc") or {}).get("track_image")
+    if not url:
+        return None
+    path = out_dir / "pagasa_track.png"
+    if path.exists():
+        return path
+    try:
+        import io
+        from .pagasa_seasonal import _get
+        Image.open(io.BytesIO(_get(url, retries=2, timeout=40))).convert("RGB").save(path)
+        return path
+    except Exception as e:  # noqa: BLE001
+        log.warning("PAGASA track image %s not available: %s", url, e)
+        return None
+
+
+def car_map(payload: dict, out_dir: Path) -> Path:
+    """CAR (our municipal boundaries) coloured by wind signal."""
+    path = out_dir / "tc_car_map.png"
+    if not path.exists():
+        from .exports import _map_only
+        _map_only(payload, payload["layers"][0], path)
+    return path
+
+
 def track_map(payload: dict, out_dir: Path, w: float, h: float, tag: str, units_per_inch: float = 110,
               legend: bool = True, inset: bool = False) -> Path:
     """The track map for a panel of w × h design units, drawn at the size it is shown: on the A4 1 inch = 150 units
@@ -318,7 +345,7 @@ def summary_rows(payload: dict) -> list[tuple[str, tuple, str]]:
     if tc.get("location_text"):
         wind = f"; winds {tc['max_wind_kmh']:.0f} km/h" if tc.get("max_wind_kmh") else ""
         move = (tc.get("movement") or "").replace("Moving ", "moving ").lower()
-        rows.append(("STORM", _cat_color(tc.get("category")), f"{tc['location_text'].split(' (')[0]}, {move}{wind}."))
+        rows.append(((tc.get("category") or "Tropical cyclone").upper(), _cat_color(tc.get("category")), f"{tc['location_text'].split(' (')[0]}, {move}{wind}."))
     sig = _signal_rows(payload)
     for n, prov, towns in sig:
         rows.append((f"SIGNAL {n}", _signal_color(payload, n), f"{prov}: {', '.join(towns)}"))
@@ -345,7 +372,7 @@ def summary_rows(payload: dict) -> list[tuple[str, tuple, str]]:
 def _summary_card(cv, payload: dict, x: float, y: float, w: float, bottom: float, hi: float = 28, lo: float = 15):
     """Summary as rows: a coloured tag, then the text; hairlines between rows."""
     rows = summary_rows(payload)
-    cv.rrect(x, y, w, bottom - y, CARD, r=18)
+    cv.rrect(x, y, w, bottom - y, (255, 255, 255), r=18, outline=LINE, width=2)
     cv.text(x + 26, y + 18, "Summary", "bold", 30, GREEN_DARK)
     cv.text(x + w - 26, y + 24, "What to do: next posts  →", "semibold", 19, MUTED, anchor="ra")
     top = y + 72
@@ -524,20 +551,47 @@ def _key_row(cv, items: list, x: float, y: float, w: float, fs: float = 18) -> f
     return fs * 1.6
 
 
+def _legend_all(cv, payload: dict, x: float, y: float, fs: float = 18) -> float:
+    """Every wind signal class (No. 1–5 and "no wind signal"); returns the bottom."""
+    for c in payload["layers"][0]["legend"]["classes"]:
+        label = c["label"].replace("Wind Signal No.", "Signal No.")
+        cv.rect(x, y + 3, fs * 1.4, fs * 0.95, _hex(c["color"]), outline=(90, 90, 90))
+        cv.text(x + fs * 1.9, y, label, "semibold", fs, INK)
+        y += fs * 1.42
+    return y
+
+
 def _map_block(cv, payload: dict, out_dir: Path, x: float, y: float, w: float, h: float, tag: str,
                units_per_inch: float, fs: float) -> float:
-    """The one map – PAGASA's style (track, cone, wind circles, PAR) with CAR by wind signal and its zoomed inset –
-    and the two-row key under it. Returns the bottom."""
-    sym, sig = _key_items(payload)
-    key_h = fs * 1.6 * 2 + 10
-    cap = "Track forecast and wind signals in CAR (DOST-PAGASA data)"
-    mh = h - key_h
-    _panel(cv, track_map(payload, out_dir, w - 16, mh - 48, tag, units_per_inch=units_per_inch, legend=False, inset=True),
-           x, y, w, mh, cap)
-    yy = y + mh + 6
-    yy += _key_row(cv, sym, x, yy, w, fs)
-    yy += _key_row(cv, sig, x, yy, w, fs)
-    return y + h
+    """PAGASA's original track and intensity forecast image (left) and CAR by wind signal with every signal class
+    (right). Without PAGASA's image, our own track map in PAGASA's style takes its place, with its key below.
+    Returns the bottom."""
+    gap = 14
+    tw = round(w * 0.665)
+    rw = w - tw - gap
+    img = track_image(payload, out_dir)
+    if img is not None:
+        with Image.open(img) as im:
+            ratio = im.height / im.width
+        ph = min(h, (tw - 16) * ratio + 48)
+        _panel(cv, img, x, y, tw, ph, "Track and intensity forecast (DOST-PAGASA)")
+        bottom = y + ph
+    else:
+        sym, _ = _key_items(payload)
+        key_h = fs * 1.6 + 8
+        ph = h - key_h
+        _panel(cv, track_map(payload, out_dir, tw - 16, ph - 48, tag, units_per_inch=units_per_inch, legend=False),
+               x, y, tw, ph, "Track forecast (DOST-PAGASA data)")
+        _key_row(cv, sym, x, y + ph + 6, w, fs)
+        bottom = y + h
+    # CAR by wind signal, with the legend of every signal class under the map
+    rx = x + tw + gap
+    leg_fs = fs
+    leg_h = 6 * leg_fs * 1.42 + 12
+    _panel(cv, None, rx, y, rw, ph, "Wind signals in CAR")
+    cv.paste(_crop_transparent(car_map(payload, out_dir)), rx + 8, y + 42, rw - 16, ph - 54 - leg_h)
+    _legend_all(cv, payload, rx + 18, y + ph - leg_h, fs=leg_fs)
+    return bottom
 
 
 def a4_page(payload: dict, out_dir: Path) -> dict:
@@ -579,6 +633,48 @@ def a4_page(payload: dict, out_dir: Path) -> dict:
 
 # ------------------------------------------------------------ Facebook posts ---
 
+PAGE_TINT = (244, 248, 245)          # Facebook posts: pale green page, white cards
+BLOB_GREEN = (226, 239, 230)
+BLOB_AMBER = (252, 241, 218)
+
+
+def _fb_canvas():
+    """A Facebook post page in the IEC style: pale tint, two soft circles in the corners, a thin green / amber stripe
+    on top."""
+    cv = _canvas(FACEBOOK)
+    W, H = cv.W, cv.H
+    s = cv.s
+    cv.rect(0, 0, W, H, PAGE_TINT)
+    cv.d.ellipse([(W - 330) * s, -260 * s, (W + 250) * s, 320 * s], fill=BLOB_GREEN)
+    cv.d.ellipse([-220 * s, (H - 420) * s, 260 * s, (H + 60) * s], fill=BLOB_AMBER)
+    cv.rect(0, 0, W, 10, GREEN)
+    cv.rect(W - 220, 0, 220, 10, pages.AMBER)
+    return cv
+
+
+def _fb_title(cv, x: float, y: float, text: str, size: float = 40):
+    """Page title with a short amber underline."""
+    cv.text(x, y, text, "bold", size, INK)
+    cv.rrect(x, y + size * 1.25, 72, 7, pages.AMBER, r=3)
+
+
+def _fb_footer(cv, payload: dict):
+    """Green band: sources (left), DA-RFO-CAR · AMIA (right)."""
+    W, H = cv.W, cv.H
+    t = payload.get("texts", {})
+    y = H - 80
+    cv.rect(0, y, W, 80, GREEN_DARK)
+    cv.rect(0, y, W, 4, pages.AMBER)
+    lab = "DA-RFO-CAR · AMIA"
+    lab_w = cv.width(lab, "bold", 22) + 40
+    src = f"Sources: {t.get('sources') or payload.get('source', '')}"
+    lines = cv.wrap(src, "regular", 17, W - 80 - lab_w)[:2]
+    ty = y + 40 - len(lines) * 22 / 2 + 2
+    for i, l in enumerate(lines):
+        cv.text(40, ty + i * 22, l, "regular", 17, (214, 236, 222))
+    cv.text(W - 40, y + 42, lab, "bold", 22, (255, 255, 255), anchor="rm")
+
+
 def _fb_header(cv, payload: dict, kicker: str) -> float:
     """Compact letterhead for the posts: logos, DA-RFO-CAR · AMIA, the product name and the kicker."""
     from .envi import config as envi_config
@@ -600,7 +696,7 @@ def _fb_header(cv, payload: dict, kicker: str) -> float:
 
 def advisory_post(payload: dict, out_dir: Path) -> dict:
     """The first post: the track map with CAR's wind signals (what people see first), its key, and the summary."""
-    cv = _canvas(FACEBOOK)
+    cv = _fb_canvas()
     W, H = cv.W, cv.H
     tc = payload.get("tc") or {}
     y = _fb_header(cv, payload, f"for CAR  ·  as of {tc.get('issued_text') or payload.get('issued', '')}")
@@ -609,7 +705,7 @@ def advisory_post(payload: dict, out_dir: Path) -> dict:
     y = _map_block(cv, payload, out_dir, 40, y, W - 80, 690, "facebook", 120, 19) + 12
     # summary
     _summary_card(cv, payload, 40, y, W - 80, H - 96)
-    _footer(cv, payload)
+    _fb_footer(cv, payload)
     png, jpg = _save(cv, *pages._files(payload, out_dir, "advisory", "facebook"))
     return {"layer": "advisory", "label": "Advisory", "png": png, "jpg": jpg,
             "alt": f"Special Farm Weather Outlook and Advisory for CAR: {_storm(payload)} – track forecast (DOST-PAGASA) "
@@ -636,16 +732,18 @@ def action_posts(payload: dict, out_dir: Path) -> list[dict]:
     groups = [secs[:1], secs[1:]] if len(secs) > 1 else [secs]
     out = []
     for k, group in enumerate(groups, start=1):
-        cv = _canvas(FACEBOOK)
+        cv = _fb_canvas()
         W, H = cv.W, cv.H
         y = _fb_header(cv, payload, f"What farmers should do  ·  {_storm(payload)}")
         blocks: list[tuple] = []
         for head, bl in group:
             blocks += [("sub", head)] + bl + [("gap", 14)]
-        cv.text(48, y + 6, "What to do" if k == 1 else "During and after the storm", "bold", 40, INK)
-        fs = _flow(cv, [(48, W - 96)], y + 70, H - 104, blocks[:-1], hi=36, lo=17)
+        _fb_title(cv, 48, y + 6, "What to do" if k == 1 else "During and after the storm")
+        top = y + 84
+        cv.rrect(40, top, W - 80, H - 100 - top, (255, 255, 255), r=18, outline=LINE, width=2)
+        fs = _flow(cv, [(66, W - 132)], top + 20, H - 118, blocks[:-1], hi=34, lo=17)
         log.info("Facebook actions post %d at %.1f units", k, fs)
-        _footer(cv, payload)
+        _fb_footer(cv, payload)
         pid = "recommendations" if k == 1 else f"recommendations_{k}"
         png, jpg = _save(cv, *pages._files(payload, out_dir, pid, "facebook"))
         out.append({"layer": pid, "label": "What to do" if k == 1 else "During and after the storm", "png": png, "jpg": jpg,
@@ -669,11 +767,11 @@ def crops_post(payload: dict, out_dir: Path) -> dict | None:
     cards = [(lab, _hex(col), _crop_points(t[k])) for k, lab, col in pages._ADVICE if t.get(k)]
     if not cards:
         return None
-    cv = _canvas(FACEBOOK)
+    cv = _fb_canvas()
     W, H = cv.W, cv.H
     y = _fb_header(cv, payload, f"Crop and livestock advisory  ·  {_storm(payload)}")
-    cv.text(48, y + 6, "Crop and livestock advice", "bold", 40, INK)
-    y += 70
+    _fb_title(cv, 48, y + 6, "Crop and livestock advice")
+    y += 84
     cols = 2 if len(cards) > 1 else 1
     rows = (len(cards) + cols - 1) // cols
     gap = 16
@@ -690,7 +788,7 @@ def crops_post(payload: dict, out_dir: Path) -> dict | None:
     for i, (lab, col, pts) in enumerate(cards):
         x0 = 40 + (i % cols) * (cw + gap)
         y0 = y + (i // cols) * (ch + gap)
-        cv.rrect(x0, y0, cw, ch, CARD, r=18)
+        cv.rrect(x0, y0, cw, ch, (255, 255, 255), r=18, outline=LINE, width=2)
         cv.rrect(x0 + pad, y0, cw - 2 * pad, 6, col, r=3)
         r = 9
         cv.d.ellipse([(x0 + pad) * cv.s, (y0 + pad + 20 - r) * cv.s, (x0 + pad + 2 * r) * cv.s, (y0 + pad + 20 + r) * cv.s],
@@ -705,7 +803,7 @@ def crops_post(payload: dict, out_dir: Path) -> dict | None:
                 yy += fs * 1.3
             yy += fs * 0.55
     log.info("Facebook crops post at %.1f units", fs)
-    _footer(cv, payload)
+    _fb_footer(cv, payload)
     png, jpg = _save(cv, *pages._files(payload, out_dir, "crops", "facebook"))
     return {"layer": "crops", "label": "Crop and livestock advice", "png": png, "jpg": jpg,
             "alt": "What to do for rice, corn, high-value crops and livestock in CAR – " + _storm(payload)}

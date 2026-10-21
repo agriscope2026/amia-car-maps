@@ -111,11 +111,21 @@ def template(kind: str, period_start: str = "2026-10", period_end: str = "2027-0
         from openpyxl import load_workbook
         wb = load_workbook(io.BytesIO(data))
         ws = wb["DATA"]
-        for col, width in zip("ABCDEFGHIJKL", (14, 22, 44, 22, 13, 18, 13, 13, 14, 13, 24, 36)):
+        for col, width in zip("ABCDEFGHIJKLM", (14, 22, 44, 12, 22, 13, 13, 13, 18, 14, 14, 24, 36)):
             ws.column_dimensions[col].width = width
+        # dropdowns: STATUS and BENEFICIARY_TYPE
+        from openpyxl.worksheet.datavalidation import DataValidation
+        for col, values in (("F", "To conduct,Ongoing,Completed,Postponed"), ("I", "Individual,FCA")):
+            dv = DataValidation(type="list", formula1=f'"{values}"', allow_blank=True, showErrorMessage=True,
+                                error="Choose a value from the list.")
+            ws.add_data_validation(dv)
+            dv.add(f"{col}2:{col}1000")
         buf = io.BytesIO()
         wb.save(buf)
         return "activities_template.xlsx", buf.getvalue()
+    if kind == "recommendations":
+        from . import recommendations_template
+        return "banner_program_recommendations_template.xlsx", recommendations_template.build()
     if kind in ("envi_damage", "envi_crops", "envi_drought", "crops"):
         import tempfile
         from pathlib import Path
@@ -126,5 +136,5 @@ def template(kind: str, period_start: str = "2026-10", period_end: str = "2027-0
     raise KeyError(f"Unknown template '{kind}'")
 
 
-TEMPLATE_KINDS = ["rainfall_dekad", "rainfall_seasonal", "drought", "irrigation", "livestock", "activities",
+TEMPLATE_KINDS = ["rainfall_dekad", "rainfall_seasonal", "drought", "irrigation", "livestock", "activities", "recommendations",
                   "envi_drought", "envi_damage", "envi_crops"]

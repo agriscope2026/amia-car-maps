@@ -97,6 +97,7 @@ def test_without_the_pdf_the_map_has_no_track():
 def test_exports_are_one_a4_page_and_the_facebook_posts(tmp_path):
     from agriclimate import exports
     p = tc.build_from_pagasa(html=html(), pdf=PDF.read_bytes())["payload"]
+    p["tc"]["track_image"] = None                                         # no network in tests: our own track map
     m = exports.export_product(p, tmp_path, {})
     # A4 first; then the Facebook posts: the advisory (track first – no title page), what to do now, during/after
     assert [x["layer"] for x in m["maps"]] == ["a4", "advisory", "recommendations", "recommendations_2", "crops"]

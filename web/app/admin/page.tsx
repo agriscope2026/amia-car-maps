@@ -57,6 +57,13 @@ export default async function AdminHome() {
           <FeedButton type="tc_advisory" label="Fetch the latest PAGASA tropical cyclone bulletin" />
           <h4>Automatic updating</h4>
           <TcAutoSwitch initial={tcAuto} canEdit={user.role === "admin"} />
+          <h3>Recommendations from the banner programs</h3>
+          <p className="muted small">
+            An Excel form for the Rice, Corn, HVCDP, Livestock and other banner programs: farm recommendations per weather
+            condition (wind signal, heavy rainfall, rainfall forecast, drought, ENVI class, …), with Ilocano and other local
+            language translations.
+          </p>
+          <a className="btn secondary" href="/api/templates/recommendations">Download the recommendations template</a>
         </section>
 
         <section>

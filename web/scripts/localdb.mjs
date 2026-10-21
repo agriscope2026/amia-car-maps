@@ -7,7 +7,6 @@
 //   node scripts/localdb.mjs demo                  refresh only the demo products (keeps your own work)
 //   node scripts/localdb.mjs migrate               apply new migrations to an existing database (keeps your data)
 //   node scripts/localdb.mjs add-user <email> <password> [editor|admin]
-//   node scripts/localdb.mjs activities-demo [--clear]  sample activities for development (or remove them)
 //   node scripts/localdb.mjs psql                  print the psql command line
 //
 // Env: PG_HOME (default C:/Program Files/PostgreSQL/17), LOCALDB_PORT (54329),
@@ -19,7 +18,6 @@ import { Readable } from "node:stream";
 import { pipeline } from "node:stream/promises";
 import crypto from "node:crypto";
 import pg from "pg";
-import { clearSampleActivities, seedSampleActivities } from "./sample-activities.mjs";
 
 const REPO = resolve(import.meta.dirname, "..", "..");
 const HOME = join(REPO, ".localdb");
@@ -260,18 +258,10 @@ async function reset(withDemo) {
   await c.query(sql("supabase/seed.sql"));
   const n = (await c.query("select (select count(*) from gazetteer) g, (select count(*) from boundaries) b, (select postgis_lib_version()) v")).rows[0];
   console.log(`  gazetteer ${n.g} municipalities, ${n.b} boundaries, PostGIS ${n.v}`);
-  if (withDemo) {
-    await loadDemo(c);
-    await sampleActivities(c);
-  }
+  if (withDemo) await loadDemo(c);
   await addUser(c, process.env.LOCALDB_ADMIN_EMAIL ?? "admin@example.com", process.env.LOCALDB_ADMIN_PASSWORD ?? "admin-local-123", "admin");
   await c.end();
   console.log(`\nDatabase ready. In web/.env.local set:\n  DATABASE_URL=${DATABASE_URL}`);
-}
-
-async function sampleActivities(c) {
-  const r = await seedSampleActivities(c, REPO);
-  console.log(`  ${r.count} sample activities in ${r.places} municipalities (development only; ${r.atRisk} at high ENVI risk)`);
 }
 
 const [cmd, ...args] = process.argv.slice(2);
@@ -313,16 +303,8 @@ try {
     const c = await connect();
     await addUser(c, args[0], args[1], args[2]);
     await c.end();
-  } else if (cmd === "activities-demo") {
-    // sample activities for local development (--clear removes them, --if-empty only fills an empty list)
-    const c = await connect();
-    if (args.includes("--clear")) console.log(`Removed ${await clearSampleActivities(c)} sample activities.`);
-    else if (args.includes("--if-empty") && Number((await c.query("select count(*) n from activities")).rows[0].n) > 0) {
-      /* the list already has activities: leave it */
-    } else await sampleActivities(c);
-    await c.end();
   } else if (cmd === "psql") console.log(`"${exe("psql")}" -p ${PORT} -U postgres ${DB}`);
-  else console.log("Commands: setup | start | stop | status | reset [--no-demo] | demo | activities-demo [--clear] | add-user <email> <password> [role] | psql");
+  else console.log("Commands: setup | start | stop | status | reset [--no-demo] | demo | add-user <email> <password> [role] | psql");
 } catch (e) {
   console.error(e.message);
   process.exit(1);

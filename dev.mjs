@@ -56,8 +56,6 @@ if (env.DATABASE_URL) {
   } else {
     console.warn("Set DEV_ADMIN_EMAIL and DEV_ADMIN_PASSWORD (8+ characters) in web/.env.local to fix the local admin login.");
   }
-  // development only: sample activities while the list is empty (remove: cd web && node scripts/localdb.mjs activities-demo --clear)
-  spawnSync(process.execPath, [join(WEB, "scripts", "localdb.mjs"), "activities-demo", "--if-empty"], { stdio: "inherit" });
 }
 
 // ports 3000 (web) and 8001 (worker) must be free – usually they are held by an earlier `node dev.mjs` that is

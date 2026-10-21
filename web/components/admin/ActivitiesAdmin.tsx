@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { api } from "@/lib/client";
-import { ACTIVITY_STATUSES, placesSummary, type Activity } from "@/lib/activities";
+import { ACTIVITY_STATUSES, BENEFICIARY_TYPES, beneficiariesText, placesSummary, type Activity } from "@/lib/activities";
 import { fmtNumber } from "@/lib/format";
 import { dateRange, StatusChip } from "@/components/ActivityBits";
 import AreaPicker from "./AreaPicker";
@@ -16,6 +16,8 @@ type Form = {
   hazard: string;
   start_date: string;
   end_date: string;
+  units: string;
+  beneficiary_type: string;
   beneficiaries: string;
   budget: string;
   office: string;
@@ -25,18 +27,20 @@ type Form = {
 // every activity is part of the El Niño action plan (hazard "envi")
 const EMPTY: Form = {
   area_keys: [], title: "", category: "", status: "to_conduct", hazard: "envi", start_date: "",
-  end_date: "", beneficiaries: "", budget: "", office: "", remarks: "",
+  end_date: "", units: "", beneficiary_type: "", beneficiaries: "", budget: "", office: "", remarks: "",
 };
 
 const num = (s: string) => (s.trim() === "" ? null : Number(s.replace(/,/g, "")));
 const toInput = (f: Form) => ({
   area_keys: f.area_keys, title: f.title, category: f.category, status: f.status, hazard: f.hazard,
-  start_date: f.start_date, end_date: f.end_date, beneficiaries: num(f.beneficiaries), budget: num(f.budget),
+  start_date: f.start_date, end_date: f.end_date, units: num(f.units), beneficiary_type: f.beneficiary_type || null,
+  beneficiaries: num(f.beneficiaries), budget: num(f.budget),
   office: f.office, remarks: f.remarks,
 });
 const fromActivity = (a: Activity): Form => ({
   area_keys: a.area_keys, title: a.title, category: a.category ?? "", status: a.status, hazard: a.hazard,
-  start_date: a.start_date ?? "", end_date: a.end_date ?? "", beneficiaries: a.beneficiaries?.toString() ?? "",
+  start_date: a.start_date ?? "", end_date: a.end_date ?? "", units: a.units?.toString() ?? "",
+  beneficiary_type: a.beneficiary_type ?? "", beneficiaries: a.beneficiaries?.toString() ?? "",
   budget: a.budget?.toString() ?? "", office: a.office ?? "", remarks: a.remarks ?? "",
 });
 
@@ -273,7 +277,20 @@ export default function ActivitiesAdmin({ geo }: { geo: Gazetteer }) {
               <input id="a-end" type="date" min={form.start_date || undefined} value={form.end_date} onChange={(e) => set("end_date", e.target.value)} />
             </div>
             <div className="field">
-              <label htmlFor="a-ben">Beneficiaries (farmers)</label>
+              <label htmlFor="a-units">No. of units</label>
+              <input id="a-units" type="number" min={0} step="any" value={form.units} onChange={(e) => set("units", e.target.value)} />
+            </div>
+            <div className="field">
+              <label htmlFor="a-bentype">Beneficiaries are</label>
+              <select id="a-bentype" value={form.beneficiary_type} onChange={(e) => set("beneficiary_type", e.target.value)}>
+                <option value="">– not specified –</option>
+                {BENEFICIARY_TYPES.map((b) => <option key={b.id} value={b.id}>{b.label}</option>)}
+              </select>
+            </div>
+            <div className="field">
+              <label htmlFor="a-ben">
+                {form.beneficiary_type === "fca" ? "Number of FCAs" : form.beneficiary_type === "individual" ? "Number of farmers" : "Number of beneficiaries"}
+              </label>
               <input id="a-ben" type="number" min={0} step={1} value={form.beneficiaries} onChange={(e) => set("beneficiaries", e.target.value)} />
             </div>
             <div className="field">
@@ -327,7 +344,8 @@ export default function ActivitiesAdmin({ geo }: { geo: Gazetteer }) {
                   <th>Activity</th>
                   <th>Status</th>
                   <th>Dates</th>
-                  <th>Farmers</th>
+                  <th>Units</th>
+                  <th>Beneficiaries</th>
                   <th>Budget (PHP)</th>
                   <th>Office</th>
                   <th></th>
@@ -352,7 +370,8 @@ export default function ActivitiesAdmin({ geo }: { geo: Gazetteer }) {
                         </select>
                       </td>
                       <td className="small">{dateRange(a)}</td>
-                      <td>{a.beneficiaries != null ? fmtNumber(a.beneficiaries, 0) : ""}</td>
+                      <td>{a.units != null ? fmtNumber(a.units, 0) : ""}</td>
+                      <td>{beneficiariesText(a.beneficiaries, a.beneficiary_type)}</td>
                       <td>{a.budget != null ? fmtNumber(a.budget, 2) : ""}</td>
                       <td className="small">{a.office}</td>
                       <td>

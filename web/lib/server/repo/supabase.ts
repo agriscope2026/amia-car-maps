@@ -12,7 +12,7 @@ const VERSION_SELECT =
   "id, product_id, version, status, title, settings, exports, created_at, published_at, period:payload->period, issued:payload->>issued, products!inner(type), author_p:profiles!product_versions_author_fkey(email), pub_p:profiles!product_versions_published_by_fkey(email)";
 
 const ACTIVITY_SELECT =
-  "id, area_keys, title, category, status, hazard, start_date, end_date, beneficiaries, budget, office, remarks, source, created_by:created_by_email, created_at, updated_at";
+  "id, area_keys, title, category, status, hazard, start_date, end_date, units, beneficiary_type, beneficiaries, budget, office, remarks, source, created_by:created_by_email, created_at, updated_at";
 
 function toVersion(r: any): VersionRecord {
   return {

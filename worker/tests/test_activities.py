@@ -16,16 +16,17 @@ def test_template_examples_parse():
     assert name == "activities_template.xlsx"
     res = activities.parse(data, name)
     assert res["ok"], res["report"]
-    # one activity per row: the second takes place in two municipalities, the third in two whole provinces
+    # one activity per row; the third takes place in two whole provinces
     assert res["count"] == 3
     one, two, three = res["rows"]
-    assert one["area_keys"] == ["ABRA|BANGUED"]
-    assert two["area_keys"] == ["BENGUET|LA TRINIDAD", "BENGUET|TUBLAY"]
+    assert one["area_keys"] == ["ABRA|BANGUED"] and two["area_keys"] == ["KALINGA|TABUK"]
     g = reference.gazetteer_table()
     assert sorted(three["area_keys"]) == sorted(g.area_key[g.area_key.str.startswith(("IFUGAO|", "KALINGA|"))])
-    first = one
-    assert first["status"] == "ongoing" and first["hazard"] == "envi"
-    assert first["start_date"] == "2026-10-15" and first["beneficiaries"] == 250 and first["budget"] == 375000
+    assert one["status"] == "completed" and one["hazard"] == "general"          # no MAP column: every map
+    assert one["start_date"] == "2026-03-01" and one["budget"] == 160000
+    # No. of units, and the beneficiaries: individual farmers or farmer groups (FCA) and how many
+    assert (one["units"], one["beneficiary_type"], one["beneficiaries"]) == (2, "individual", 2)
+    assert (two["units"], two["beneficiary_type"], two["beneficiaries"]) == (1, "fca", 1)
     assert any("example rows" in w for w in res["report"]["warnings"])
 
 
@@ -82,3 +83,15 @@ def test_whole_car_and_unknown_province():
     assert "Row 4: PROVINCE 'Narnia' is not a CAR province." in errs
     assert "Row 5: 'Atlantis' is not a CAR municipality" in errs
     assert [len(r["area_keys"]) for r in res["rows"]] == [77, 77]
+
+
+def test_beneficiary_type_words():
+    cols = ["Municipality", "Activity", "No. of Units", "Status", "Beneficiary Type", "Beneficiaries"]
+    data = _xlsx([["Bangued", "Cistern", 3, "Completed", "Farmer Cooperative", 1],
+                  ["Bangued", "PISOS", 2, "Completed", "Farmers", 2],
+                  ["Bangued", "Seeds", None, "Completed", None, 40],
+                  ["Bangued", "Training", None, "Completed", "Barangay", 10]], cols)
+    res = activities.parse(data, "list.xlsx")
+    assert [r["beneficiary_type"] for r in res["rows"]] == ["fca", "individual", None]
+    assert res["rows"][0]["units"] == 3
+    assert any("BENEFICIARY_TYPE 'Barangay'" in e for e in res["report"]["errors"])

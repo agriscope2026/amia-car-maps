@@ -12,9 +12,11 @@ const VERSION_COLS = `v.id, v.product_id, p.type, v.version, v.status, v.title, 
 const VERSION_FROM = `product_versions v join products p on p.id = v.product_id
   left join profiles a on a.id = v.author left join profiles pb on pb.id = v.published_by`;
 
-const ACTIVITY_COLS = `id, area_keys, title, category, status, hazard, start_date, end_date, beneficiaries, budget, office,
+const ACTIVITY_COLS = `id, area_keys, title, category, status, hazard, start_date, end_date, units, beneficiary_type,
+  beneficiaries, budget, office,
   remarks, source, created_by_email as created_by, created_at, updated_at`;
-const ACTIVITY_FIELDS = ["area_keys", "title", "category", "status", "hazard", "start_date", "end_date", "beneficiaries",
+const ACTIVITY_FIELDS = ["area_keys", "title", "category", "status", "hazard", "start_date", "end_date", "units",
+  "beneficiary_type", "beneficiaries",
   "budget", "office", "remarks"] as const;
 
 const uid = (a: Actor) => (a.id && UUID_RE.test(a.id) ? a.id : null);
@@ -216,7 +218,8 @@ export const postgresRepo: Repo = {
         `insert into activities (${ACTIVITY_FIELDS.join(", ")}, source, created_by, created_by_email)
          select ${ACTIVITY_FIELDS.join(", ")}, $2, $3, $4
          from jsonb_to_recordset($1::jsonb) as x(area_keys text[], title text, category text, status text, hazard text,
-           start_date date, end_date date, beneficiaries int, budget numeric, office text, remarks text)`,
+           start_date date, end_date date, units numeric, beneficiary_type text, beneficiaries int, budget numeric,
+           office text, remarks text)`,
         [JSON.stringify(rows), source, uid(actor), actor.email],
       );
     });
