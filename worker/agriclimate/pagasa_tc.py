@@ -274,20 +274,24 @@ def storm_force_km(png: bytes, wind_extent_km: float | None) -> int | None:
 
     import numpy as np
     from PIL import Image
-    a = np.asarray(Image.open(io.BytesIO(png)).convert("RGB")).astype(int)
+    # PAGASA's image is ~2700 × 2200 px: shrink it first (nearest neighbour keeps the flat colours exact, and the
+    # ratio of the radii does not depend on the size) and use int16, so this takes a few MB instead of ~400 MB
+    im = Image.open(io.BytesIO(png)).convert("RGB")
+    im.thumbnail((900, 900), Image.NEAREST)
+    a = np.asarray(im).astype(np.int16)
     r, g, b = a[..., 0], a[..., 1], a[..., 2]
     red = (r >= 150) & (r <= 215) & (r - g >= 45) & (r - b >= 55)            # translucent red over sea or land
     yellow = np.zeros(red.shape, bool)
     for c in ((207, 213, 182), (216, 211, 174)):                             # translucent yellow over sea / land
         yellow |= np.abs(a - c).sum(2) <= 10
-    if red.sum() < 500 or yellow.sum() < 2000:
+    if red.sum() < 100 or yellow.sum() < 400:
         return None
     # the disc of both colours (the red one sits inside the yellow one); other reddish marks (logos, labels) are
     # outside the yellow disc and left out
     yy, yx = np.nonzero(yellow)
     y0, y1, x0, x1 = np.percentile(yy, 0.2), np.percentile(yy, 99.8), np.percentile(yx, 0.2), np.percentile(yx, 99.8)
     red[:int(y0)], red[int(y1) + 1:], red[:, :int(x0)], red[:, int(x1) + 1:] = False, False, False, False
-    if red.sum() < 500:
+    if red.sum() < 100:
         return None
     ys, xs = np.nonzero(red)
     cy, cx = ys.mean(), xs.mean()
