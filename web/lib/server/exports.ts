@@ -33,7 +33,7 @@ export function manifestFiles(m: any): string[] {
 export function downloadsFromManifest(m: any, href: (file: string) => string): Download[] {
   const out: Download[] = [];
   // tropical cyclone outlook: the one A4 page comes as PDF (print) and PNG
-  const tcLabels: Record<string, string> = { pdf: "A4 – PDF (print)", poster: "A4 – PNG (3720×5262, 450 dpi)" };
+  const tcLabels: Record<string, string> = { pdf: "Print format (A4) – PDF", poster: "Print format (A4) – PNG (3720×5262, 450 dpi)" };
   for (const mp of m.maps ?? []) {
     for (const [k, label, preview] of MAP_FILES)
       if (mp[k])

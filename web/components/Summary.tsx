@@ -81,6 +81,22 @@ export function Summary({ payload, layer, crops, names }: { payload: Payload; la
             </>
           )}
         </p>
+        {!!tc.track_geojson?.features?.length && (
+          <div className="tc-key" aria-label="Map key">
+            <strong>On the map</strong>
+            <span><i className="dot" aria-hidden /> Storm position (category: TD, TS, STS, TY, STY)</span>
+            {tc.track_geojson.features.some((f) => f.properties.kind === "cone") && (
+              <span><i style={{ background: "rgba(143,154,163,.45)", borderColor: "#5f6b73" }} aria-hidden /> Forecast cone (approximate)</span>
+            )}
+            {tc.wind_extent_km ? (
+              <span><i style={{ background: "rgba(255,230,0,.5)", borderColor: "#c9a800" }} aria-hidden /> Strong winds or higher (up to {tc.wind_extent_km} km)</span>
+            ) : null}
+            {tc.storm_force_km ? (
+              <span><i style={{ background: "rgba(208,69,58,.5)", borderColor: "#9e2a20" }} aria-hidden /> Storm-force winds or higher (up to {tc.storm_force_km} km)</span>
+            ) : null}
+            <span><i className="dash" aria-hidden /> Philippine Area of Responsibility</span>
+          </div>
+        )}
         {tc.track_image && (
           <a href={tc.track_image} target="_blank" rel="noreferrer" className="tc-track">
             <img src={tc.track_image} alt={`PAGASA track and intensity forecast of ${tc.name}`} loading="lazy" />

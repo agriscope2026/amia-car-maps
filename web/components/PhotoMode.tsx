@@ -21,9 +21,10 @@ const href = (d?: Download) => d?.url ?? d?.path;
 export type PhotoView = "landscape" | "portrait";
 
 /** Rainfall / drought report pages around the maps (not map layers): title first, summary and recommendations last. */
-const PAGE_RE = /^(a4|cover|advisory|summary|recommendations)(?:_(\d+))?$/;
-// a4: the one-page A4 of the tropical cyclone outlook; advisory: its main Facebook post
-const PAGE_RANK = { a4: 0, cover: 1, advisory: 2, summary: 3, recommendations: 4 } as const;
+const PAGE_RE = /^(a4|cover|advisory|summary|recommendations|crops)(?:_(\d+))?$/;
+// a4: the one-page A4 (print format) of the tropical cyclone outlook; advisory: its main Facebook post; crops: its
+// crop and livestock advice post
+const PAGE_RANK = { a4: 0, cover: 1, advisory: 2, summary: 3, recommendations: 4, crops: 5 } as const;
 const isPage = (id: string) => PAGE_RE.test(id);
 
 /** Report pages of a product (title first, then summary and recommendations pages in order), from its downloads:
@@ -176,8 +177,8 @@ export default function PhotoMode({ payload, layerId, onLayer, onClose }: {
           <div className="photo-view" role="radiogroup" aria-label="Image format">
             {(["landscape", "portrait"] as const).map((v) => (
               <button key={v} role="radio" aria-checked={view === v} className={`photo-btn ${view === v ? "on" : ""}`} onClick={() => setView(v)}
-                title={v === "landscape" ? (tc ? "Facebook post (4:5)" : "Presentation (landscape)") : "A4 poster (portrait)"}>
-                {v === "landscape" ? (tc ? "f" : "▭") : "▯"}<span className="photo-btn-label"> {v === "landscape" ? (tc ? "Facebook" : "Presentation") : "A4"}</span>
+                title={v === "landscape" ? (tc ? "Facebook post (4:5)" : "Presentation (landscape)") : (tc ? "Print format (A4 page)" : "A4 poster (portrait)")}>
+                {v === "landscape" ? (tc ? "f" : "▭") : "▯"}<span className="photo-btn-label"> {v === "landscape" ? (tc ? "Facebook" : "Presentation") : (tc ? "Print format" : "A4")}</span>
               </button>
             ))}
           </div>

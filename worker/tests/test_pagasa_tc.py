@@ -70,24 +70,36 @@ def test_track_buffer_and_distance_to_car():
     d = p["summary"]["car_distance"]
     assert 500 <= d["closest_km"] <= 600 and d["closest_time"] == "2:00 PM 22 October 2026"
     assert d["now_km"] > d["closest_km"] and d["car_in_buffer"]              # within 780 km of the track
+    assert not d["car_in_strong_winds_now"]                                  # 1005 km away now, circle 780 km
     kinds = [f["properties"]["kind"] for f in p["tc"]["track_geojson"]["features"]]
-    assert kinds[:3] == ["buffer", "track", "now"] and kinds.count("forecast") == 7
+    assert kinds[:5] == ["par", "cone", "strong_winds", "track", "now"] and kinds.count("forecast") == 7
+
+
+TRACK_PNG = Path(__file__).parent / "fixtures" / "pagasa_tc_rosal_tcb4_track.png"   # PAGASA's track image, same bulletin
+
+
+def test_storm_force_circle_measured_on_the_pagasa_image():
+    # yellow circle = 780 km (bulletin); the red one is about 0.36 of it on PAGASA's image
+    assert 250 <= tc.storm_force_km(TRACK_PNG.read_bytes(), 780) <= 310
+    p = tc.build_from_pagasa(html=html(), pdf=PDF.read_bytes(), track_png=TRACK_PNG.read_bytes())["payload"]
+    kinds = [f["properties"]["kind"] for f in p["tc"]["track_geojson"]["features"]]
+    assert kinds[:5] == ["par", "cone", "strong_winds", "storm_force", "track"]
+    assert tc.storm_force_km(b"", 780) is None
 
 
 def test_without_the_pdf_the_map_has_no_track():
     p = tc.build_from_pagasa(html=html())["payload"]
     assert "car_distance" not in p["summary"]
-    assert [f["properties"]["kind"] for f in p["tc"]["track_geojson"]["features"]] == ["now"]
+    assert [f["properties"]["kind"] for f in p["tc"]["track_geojson"]["features"]] == ["par", "now"]
     assert any("forecast track" in w for w in p["report"]["warnings"])
 
 
 def test_exports_are_one_a4_page_and_the_facebook_posts(tmp_path):
     from agriclimate import exports
     p = tc.build_from_pagasa(html=html(), pdf=PDF.read_bytes())["payload"]
-    p["tc"]["track_image"] = None                                         # no network in tests
     m = exports.export_product(p, tmp_path, {})
     # A4 first; then the Facebook posts: the advisory (track first – no title page), what to do now, during/after
-    assert [x["layer"] for x in m["maps"]] == ["a4", "advisory", "recommendations", "recommendations_2"]
+    assert [x["layer"] for x in m["maps"]] == ["a4", "advisory", "recommendations", "recommendations_2", "crops"]
     a4 = m["maps"][0]
     assert (tmp_path / a4["pdf"]).read_bytes()[:5] == b"%PDF-"
     from PIL import Image

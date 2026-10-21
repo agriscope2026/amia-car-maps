@@ -239,9 +239,11 @@ the admin home page. The portal reads PAGASA's bulletin page and makes a draft w
 - the **CAR municipalities under each wind signal**, read from PAGASA's signal list (whole provinces, named towns
   in brackets, "the rest of …" and Baguio City), shown on a CAR map;
 - whether PAGASA's gust and heavy-rain outlook names CAR;
-- the **forecast track** (centre positions from the bulletin PDF) and its **buffer**: how far the strong winds
-  reach along the track ("strong to typhoon-force winds extend outwards up to 780 km"), and how close the storm
-  comes to CAR;
+- the **forecast track** (centre positions from the bulletin PDF, each with its category), drawn like PAGASA's track
+  map: the yellow **area with strong winds or higher** around the present centre ("strong to typhoon-force winds
+  extend outwards up to 780 km"), the red **area with storm-force winds** (not in the bulletin text: measured on
+  PAGASA's track image against the yellow circle), the **forecast cone** (approximate – drawn from typical forecast
+  track errors, as PAGASA does not publish its cone as numbers), the PAR line, and how close the storm comes to CAR;
 - a farm advisory for CAR (what to do now, by the highest signal) and crop advice for rice, corn, HVC and livestock.
 
 **Always check the signals against PAGASA's bulletin** (the preview map and the list) before you save the draft.
@@ -250,19 +252,20 @@ Then edit the texts if needed, generate the exports and publish, as with the oth
 The exports are:
 
 - **One A4 page for printing (PDF and PNG)**, with the DA-RFO-CAR / AMIA letterhead and everything on one sheet:
-  the storm, the track map with its buffer, the CAR wind-signal map, position / movement / strength / closest
-  approach, the CAR areas under each signal, the heavy rainfall for CAR, and what farmers should do – now, during
-  and after the storm.
+  the storm, the track map (PAGASA's style, with CAR coloured by wind signal and a zoomed CAR inset), position / movement / strength / closest
+  approach, the CAR areas under each signal, the heavy rainfall for CAR, what farmers should do – now, during
+  and after the storm – and the crop and livestock advice. In photo mode it is the **Print format** view.
 - **Facebook posts** (4:5, 2160 × 2700 px, the size Facebook shows without cropping), with no title page so the track
-  is the first thing people see: (1) the advisory – track map, CAR wind-signal map with its legend, and the outlook
-  summary; (2) what farmers should do now; (3) during and after the storm.
+  is the first thing people see: (1) the advisory – one map with the track, cone, wind circles and CAR by wind
+  signal, its key, and the summary; (2) what farmers should do now; (3) during and after the storm; (4) crop and livestock advice (rice,
+  corn, high-value crops, livestock).
 
 The farm advice is drafted from the situation: the wind signal, PAGASA's **Weather Advisory** (forecast rain per day
 by province, e.g. "Apayao 50–100 mm today and tomorrow"), any Heavy Rainfall Warning or Thunderstorm Advisory of
 PAGASA Northern Luzon, the gust outlook and how many hours until the storm is closest to CAR. The nearer the danger,
 the more urgent the wording ("NOW – within the next 12 hours"). Edit it in the draft if needed before exporting.
 
-On the dashboard the map zooms out to show the track, its buffer and CAR together. Everything keeps a margin
+On the dashboard the map zooms out to show the track, the strong-wind area and CAR together. Everything keeps a margin
 from the edges, so nothing is cut off when posted or printed. PAGASA issues a bulletin every 6 hours, so fetch
 again and publish a new version as the storm moves.
 

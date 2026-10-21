@@ -877,9 +877,13 @@ select { width: 100%; padding: 8px 10px; border: 1px solid var(--line); border-r
 }
 
 /* tropical cyclone (farm weather outlook) in the dashboard summary */
-.tc-box { display: grid; gap: 2px; background: #0d274d; color: #fff; border-radius: var(--radius); padding: 10px 12px; margin-bottom: 8px; }
+.tc-box { display: grid; gap: 2px; background: #fff; color: #212529; border: 1px solid #dee5e1; border-left: 5px solid #c62828; border-radius: var(--radius); padding: 10px 12px; margin-bottom: 8px; }
 .tc-box strong { font-size: 15px; }
-.tc-box span { font-size: 12px; color: #b9cdea; }
+.tc-box span { font-size: 12px; color: #5f6368; }
+.tc-key { display: grid; gap: 4px; font-size: 12.5px; background: #f7f9f8; border-radius: var(--radius); padding: 8px 10px; margin: 8px 0; }
+.tc-key i { display: inline-block; width: 16px; height: 11px; border-radius: 3px; border: 1px solid; vertical-align: -1px; margin-right: 4px; }
+.tc-key i.dot { width: 11px; border-radius: 50%; background: #111; border-color: #111; }
+.tc-key i.dash { height: 0; border: 0; border-top: 2px dashed #37474f; border-radius: 0; vertical-align: 3px; }
 .tc-signal { font-size: 13px; margin: 4px 0; }
 .tc-signal i { display: inline-block; width: 12px; height: 12px; border-radius: 3px; border: 1px solid rgba(0,0,0,.3); vertical-align: -1px; }
 .tc-track { display: block; margin-top: 8px; text-decoration: none; }

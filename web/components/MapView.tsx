@@ -188,24 +188,36 @@ export default function MapView(props: MapViewProps) {
           "text-size": ["interpolate", ["linear"], ["zoom"], 6, 11, 9, 16], "text-letter-spacing": 0.08, "text-max-width": 8 },
         paint: { "text-color": "#202020", "text-halo-color": "rgba(255,255,255,0.95)", "text-halo-width": 2 } });
 
-      // tropical cyclone outlook: the reach of the strong winds (buffer), the forecast track and its positions
+      // tropical cyclone outlook, drawn like PAGASA's track map: PAR (dashed), the forecast cone (approximate), the
+      // areas with strong (yellow) and storm-force (red) winds around the present centre, the forecast track and its
+      // positions with the category (TD … STY)
       map.addSource("tc", { type: "geojson", data: { type: "FeatureCollection", features: [] } });
       const tcKind = (k: string): any => ["==", ["get", "kind"], k];
-      map.addLayer({ id: "tc-buffer", type: "fill", source: "tc", filter: tcKind("buffer"), layout: { visibility: "none" },
-        paint: { "fill-color": "#ff9800", "fill-opacity": 0.16 } }, "region-halo");
-      map.addLayer({ id: "tc-buffer-line", type: "line", source: "tc", filter: tcKind("buffer"), layout: { visibility: "none" },
-        paint: { "line-color": "#e65100", "line-width": 1.6, "line-dasharray": [3, 2] } }, "region-halo");
+      const tcPts: any = ["in", ["get", "kind"], ["literal", ["now", "forecast"]]];
+      map.addLayer({ id: "tc-par", type: "line", source: "tc", filter: tcKind("par"), layout: { visibility: "none" },
+        paint: { "line-color": "#37474f", "line-width": 1.4, "line-dasharray": [4, 3] } }, "region-halo");
+      map.addLayer({ id: "tc-cone", type: "fill", source: "tc", filter: tcKind("cone"), layout: { visibility: "none" },
+        paint: { "fill-color": "#8f9aa3", "fill-opacity": 0.28, "fill-outline-color": "#5f6b73" } }, "region-halo");
+      map.addLayer({ id: "tc-winds", type: "fill", source: "tc", filter: tcKind("strong_winds"), layout: { visibility: "none" },
+        paint: { "fill-color": "#ffe600", "fill-opacity": 0.32 } }, "region-halo");
+      map.addLayer({ id: "tc-winds-line", type: "line", source: "tc", filter: tcKind("strong_winds"), layout: { visibility: "none" },
+        paint: { "line-color": "#c9a800", "line-width": 1.4 } }, "region-halo");
+      map.addLayer({ id: "tc-storm", type: "fill", source: "tc", filter: tcKind("storm_force"), layout: { visibility: "none" },
+        paint: { "fill-color": "#d0453a", "fill-opacity": 0.4, "fill-outline-color": "#9e2a20" } }, "region-halo");
       map.addLayer({ id: "tc-track", type: "line", source: "tc", filter: tcKind("track"),
         layout: { visibility: "none", "line-cap": "round", "line-join": "round" },
-        paint: { "line-color": "#b71c1c", "line-width": 3.5 } });
-      map.addLayer({ id: "tc-points", type: "circle", source: "tc", filter: ["in", ["get", "kind"], ["literal", ["now", "forecast"]]],
-        layout: { visibility: "none" },
-        paint: { "circle-radius": ["case", ["==", ["get", "kind"], "now"], 10, 6], "circle-color": "#b71c1c",
-          "circle-stroke-color": "#ffffff", "circle-stroke-width": 2 } });
-      map.addLayer({ id: "tc-labels", type: "symbol", source: "tc", filter: ["in", ["get", "kind"], ["literal", ["now", "forecast"]]],
-        layout: { visibility: "none", "text-field": ["case", ["==", ["get", "kind"], "now"], "NOW", ["get", "label"]],
-          "text-font": ["Montserrat SemiBold"], "text-size": 11, "text-offset": [0.9, 0], "text-anchor": "left", "text-max-width": 12 },
-        paint: { "text-color": "#5a1010", "text-halo-color": "rgba(255,255,255,0.95)", "text-halo-width": 1.6 } });
+        paint: { "line-color": "#111111", "line-width": 2.2 } });
+      map.addLayer({ id: "tc-points", type: "circle", source: "tc", filter: tcPts, layout: { visibility: "none" },
+        paint: { "circle-radius": ["case", ["==", ["get", "kind"], "now"], 13, 11], "circle-color": "#111111",
+          "circle-stroke-color": "#ffffff", "circle-stroke-width": 1.5 } });
+      map.addLayer({ id: "tc-cats", type: "symbol", source: "tc", filter: tcPts,
+        layout: { visibility: "none", "text-field": ["get", "cat"], "text-font": ["Montserrat Bold"], "text-size": 9,
+          "text-allow-overlap": true, "text-ignore-placement": true },
+        paint: { "text-color": "#ffffff" } });
+      map.addLayer({ id: "tc-labels", type: "symbol", source: "tc", filter: tcPts,
+        layout: { visibility: "none", "text-field": ["case", ["==", ["get", "kind"], "now"], "NOW", ["get", "time_label"]],
+          "text-font": ["Montserrat SemiBold"], "text-size": 12, "text-offset": [1.3, 0], "text-anchor": "left", "text-max-width": 12 },
+        paint: { "text-color": "#111111", "text-halo-color": "rgba(255,255,255,0.95)", "text-halo-width": 1.8 } });
 
       labelPts.current = await (await fetch("/geo/labels.geojson")).json();
       setReady(true);
@@ -319,14 +331,14 @@ export default function MapView(props: MapViewProps) {
   }, [ready, props.showHydro]);
 
   // ------------------------------------------------- tropical cyclone ---
-  // the track and its buffer reach far beyond CAR: zoom out to show them with CAR, and lift the pan limits meanwhile
+  // the track and the strong-wind circle reach far beyond CAR: zoom out to show them with CAR, and lift the pan limits meanwhile
   const tcShown = useRef<string | null>(null);
   useEffect(() => {
     const map = mapRef.current;
     if (!ready || !map) return;
     const fc = props.payload?.type === "tc_advisory" ? props.payload.tc?.track_geojson : undefined;
     const on = !!fc?.features?.length;
-    for (const id of ["tc-buffer", "tc-buffer-line", "tc-track", "tc-points", "tc-labels"])
+    for (const id of ["tc-par", "tc-cone", "tc-winds", "tc-winds-line", "tc-storm", "tc-track", "tc-points", "tc-cats", "tc-labels"])
       map.setLayoutProperty(id, "visibility", on ? "visible" : "none");
     map.setLayoutProperty("mask", "visibility", on ? "none" : "visible");
     const [x0, y0, x1, y1] = props.bounds;

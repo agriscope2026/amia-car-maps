@@ -249,9 +249,62 @@ def _aeqd(lat: float, lon: float):
     return Transformer.from_crs("EPSG:4326", crs, always_xy=True), Transformer.from_crs(crs, "EPSG:4326", always_xy=True)
 
 
+# Philippine Area of Responsibility (as drawn on PAGASA's track maps)
+PAR = [(120, 25), (135, 25), (135, 5), (115, 5), (115, 15), (120, 21), (120, 25)]
+# Half-width of the forecast cone (km) by forecast hour. The bulletin does not give PAGASA's own cone, so the cone is
+# drawn from typical track-forecast errors of the western North Pacific (about 100 km at 24 h, 170 km at 48 h,
+# 240 km at 72 h, …) – an approximation of the cone on PAGASA's track image, labelled as such.
+CONE_KM = [(0, 20), (12, 60), (24, 100), (36, 135), (48, 170), (60, 205), (72, 240), (96, 320), (120, 400)]
+
+
+def _cone_km(hours: float) -> float:
+    for (h0, r0), (h1, r1) in zip(CONE_KM, CONE_KM[1:]):
+        if hours <= h1:
+            return r0 + (r1 - r0) * (hours - h0) / (h1 - h0)
+    return CONE_KM[-1][1]
+
+
+def storm_force_km(png: bytes, wind_extent_km: float | None) -> int | None:
+    """Radius of the storm-force winds (≥ 89 km/h, PAGASA's red circle), measured on PAGASA's track image: the bulletin
+    gives only the yellow circle's radius (strong winds, ``wind_extent_km``), and both circles share the storm centre,
+    so red radius = yellow radius × (red px / yellow px). None when the image has no red circle (weaker storms)."""
+    if not png or not wind_extent_km:
+        return None
+    import io
+
+    import numpy as np
+    from PIL import Image
+    a = np.asarray(Image.open(io.BytesIO(png)).convert("RGB")).astype(int)
+    r, g, b = a[..., 0], a[..., 1], a[..., 2]
+    red = (r >= 150) & (r <= 215) & (r - g >= 45) & (r - b >= 55)            # translucent red over sea or land
+    yellow = np.zeros(red.shape, bool)
+    for c in ((207, 213, 182), (216, 211, 174)):                             # translucent yellow over sea / land
+        yellow |= np.abs(a - c).sum(2) <= 10
+    if red.sum() < 500 or yellow.sum() < 2000:
+        return None
+    # the disc of both colours (the red one sits inside the yellow one); other reddish marks (logos, labels) are
+    # outside the yellow disc and left out
+    yy, yx = np.nonzero(yellow)
+    y0, y1, x0, x1 = np.percentile(yy, 0.2), np.percentile(yy, 99.8), np.percentile(yx, 0.2), np.percentile(yx, 99.8)
+    red[:int(y0)], red[int(y1) + 1:], red[:, :int(x0)], red[:, int(x1) + 1:] = False, False, False, False
+    if red.sum() < 500:
+        return None
+    ys, xs = np.nonzero(red)
+    cy, cx = ys.mean(), xs.mean()
+    rr = np.percentile(np.hypot(ys - cy, xs - cx), 99.5)
+    ry = np.percentile(np.hypot(yy - cy, yx - cx), 99.5)
+    ratio = rr / ry if ry else 0
+    if not 0.05 < ratio < 0.95:
+        log.warning("storm-force circle not measurable on the PAGASA image (ratio %.2f)", ratio)
+        return None
+    return int(round(wind_extent_km * ratio / 10) * 10)
+
+
 def track_geometry(tc: dict) -> dict | None:
-    """Track line (now → last forecast), its buffer (the extent of the strong winds along the track) and the distance
-    from CAR. None without the forecast track."""
+    """Like PAGASA's track map: the track line (now → last forecast), the forecast cone (approximate, see CONE_KM) and,
+    around the present centre, the area with at least strong winds (≥ 39 km/h; the bulletin's "extent of tropical
+    cyclone winds") and with storm-force winds (≥ 89 km/h; measured on PAGASA's image, see storm_force_km). Also the
+    distance from CAR. None without the forecast track."""
     from shapely.geometry import LineString, Point, mapping
     from shapely.ops import transform, unary_union
     pts = ([(tc["lon"], tc["lat"])] if tc.get("lat") and tc.get("lon") else []) + [(p["lon"], p["lat"]) for p in tc.get("track") or []]
@@ -262,37 +315,63 @@ def track_geometry(tc: dict) -> dict | None:
     lon0 = sum(p[0] for p in pts) / len(pts)
     fwd, back = _aeqd(lat0, lon0)
     line = transform(fwd.transform, LineString(pts))
-    buffer = transform(back.transform, line.buffer(km * 1000, resolution=32)) if km else None
     _, prov = reference.boundaries()
-    car = transform(fwd.transform, unary_union(list(prov.to_crs("EPSG:4326").geometry)))
+    car_ll = unary_union(list(prov.to_crs("EPSG:4326").geometry))
+    car = transform(fwd.transform, car_ll)
     now = transform(fwd.transform, Point(pts[0]))
+    # the strong-wind circle, drawn in a projection centred on the storm so that it is a true circle on the ground
+    circle = storm = None
+    f2, b2 = _aeqd(pts[0][1], pts[0][0])
+    if km:
+        circle = transform(b2.transform, Point(0, 0).buffer(km * 1000, resolution=64))
+        strong_now = transform(f2.transform, car_ll).distance(Point(0, 0)) / 1000 <= km
+    if tc.get("storm_force_km"):
+        storm = transform(b2.transform, Point(0, 0).buffer(tc["storm_force_km"] * 1000, resolution=64))
+    # cone: circles growing with the forecast hour, joined pairwise
+    hours = ([0] if tc.get("lat") and tc.get("lon") else []) + [p["hours"] for p in tc.get("track") or []]
+    discs = [transform(fwd.transform, Point(x, y)).buffer(_cone_km(h) * 1000, resolution=32) for (x, y), h in zip(pts, hours)]
+    cone = unary_union([unary_union([d0, d1]).convex_hull for d0, d1 in zip(discs, discs[1:])])
     dists = [(car.distance(transform(fwd.transform, Point(p["lon"], p["lat"]))) / 1000, p) for p in tc.get("track") or []]
     near_km, near = min(dists, key=lambda d: d[0]) if dists else (None, None)
     return {
         "line": mapping(transform(back.transform, line)),
-        "buffer": mapping(buffer) if buffer is not None else None,
+        "strong_winds": mapping(circle) if circle is not None else None,
+        "storm_force": mapping(storm) if storm is not None else None,
+        "cone": mapping(transform(back.transform, cone)),
         "now_km": round(car.distance(now) / 1000),
         "closest_km": round(near_km) if near_km is not None else None,
         "closest_time": near["time"] if near else None,
         "closest_where": near["where"] if near else None,
+        # CAR within reach of the strong winds somewhere along the track (for the advice) / right now
         "car_in_buffer": bool(km and car.distance(line) / 1000 <= km),
+        "car_in_strong_winds_now": bool(km and strong_now),
     }
 
 
 def track_feature_collection(tc: dict, geom: dict | None) -> dict:
-    """GeoJSON for the dashboard map: buffer, track line and positions (now and forecast)."""
-    feats = []
-    if geom and geom.get("buffer"):
-        feats.append({"type": "Feature", "geometry": geom["buffer"],
-                      "properties": {"kind": "buffer", "km": tc.get("wind_extent_km")}})
+    """GeoJSON for the dashboard map, in PAGASA's style: PAR, the forecast cone, the strong-wind (yellow) and storm-force
+    (red) circles around the present centre, the track line and the positions (now and forecast, with their
+    category)."""
+    feats = [{"type": "Feature", "geometry": {"type": "LineString", "coordinates": [list(p) for p in PAR]},
+              "properties": {"kind": "par"}}]
+    if geom and geom.get("cone"):
+        feats.append({"type": "Feature", "geometry": geom["cone"], "properties": {"kind": "cone", "approximate": True}})
+    if geom and geom.get("strong_winds"):
+        feats.append({"type": "Feature", "geometry": geom["strong_winds"],
+                      "properties": {"kind": "strong_winds", "km": tc.get("wind_extent_km")}})
+    if geom and geom.get("storm_force"):
+        feats.append({"type": "Feature", "geometry": geom["storm_force"],
+                      "properties": {"kind": "storm_force", "km": tc.get("storm_force_km")}})
     if geom:
         feats.append({"type": "Feature", "geometry": geom["line"], "properties": {"kind": "track"}})
     if tc.get("lat") and tc.get("lon"):
         feats.append({"type": "Feature", "geometry": {"type": "Point", "coordinates": [tc["lon"], tc["lat"]]},
-                      "properties": {"kind": "now", "label": "Now", "category": tc.get("category")}})
+                      "properties": {"kind": "now", "label": "Now", "category": tc.get("category"),
+                                     "cat": {v: k for k, v in CATEGORIES.items()}.get(tc.get("category") or "", "")}})
     for p in tc.get("track") or []:
         feats.append({"type": "Feature", "geometry": {"type": "Point", "coordinates": [p["lon"], p["lat"]]},
-                      "properties": {"kind": "forecast", "label": f"{short_time(p['time'])} · {p['cat']}", "time": p["time"],
+                      "properties": {"kind": "forecast", "label": f"{short_time(p['time'])} · {p['cat']}",
+                                     "time_label": short_time(p["time"]), "time": p["time"],
                                      "cat": p["cat"], "wind_kmh": p["wind_kmh"]}})
     return {"type": "FeatureCollection", "features": feats}
 
@@ -656,7 +735,7 @@ def build_payload(b: dict, others: list[dict] | None = None, settings: dict | No
     }
     # forecast track (bulletin PDF), its buffer (extent of the strong winds) and the distance from CAR
     tc = payload["tc"]
-    tc.update({k: b.get(k) for k in ("track", "wind_extent_km", "pressure_hpa")})
+    tc.update({k: b.get(k) for k in ("track", "wind_extent_km", "storm_force_km", "pressure_hpa")})
     geom = None
     if b.get("track"):
         try:
@@ -666,7 +745,8 @@ def build_payload(b: dict, others: list[dict] | None = None, settings: dict | No
     tc["track_geojson"] = track_feature_collection(tc, geom)
     if geom:
         payload["summary"]["car_distance"] = {k: geom[k] for k in ("now_km", "closest_km", "closest_time",
-                                                                    "closest_where", "car_in_buffer")}
+                                                                    "closest_where", "car_in_buffer",
+                                                                    "car_in_strong_winds_now")}
     else:
         payload["report"]["warnings"].append("The forecast track could not be read from the bulletin PDF – the map "
                                              "shows the present position only.")
@@ -709,9 +789,10 @@ def build_payload(b: dict, others: list[dict] | None = None, settings: dict | No
 
 
 def build_from_pagasa(settings: dict | None = None, html: str | None = None, pdf: bytes | None = None,
-                      advisory_html: str | None = None, regional_html: str | None = None) -> dict:
-    """``html`` / ``pdf`` / ``advisory_html`` / ``regional_html``: the bulletin page and PDF, the Weather Advisory
-    and the Northern Luzon page (tests); fetched from PAGASA when not given."""
+                      advisory_html: str | None = None, regional_html: str | None = None,
+                      track_png: bytes | None = None) -> dict:
+    """``html`` / ``pdf`` / ``advisory_html`` / ``regional_html`` / ``track_png``: the bulletin page and PDF, the
+    Weather Advisory, the Northern Luzon page and PAGASA's track image (tests); fetched from PAGASA when not given."""
     fetching = html is None
     html = html if html is not None else fetch_html()
     tcs = parse_page(html)
@@ -735,6 +816,12 @@ def build_from_pagasa(settings: dict | None = None, html: str | None = None, pdf
         except Exception as e:  # noqa: BLE001
             log.warning("bulletin PDF could not be read: %s", e)
     from .pagasa_seasonal import _get
+    try:
+        if track_png is None and fetching and b.get("track_image"):
+            track_png = _get(b["track_image"], retries=2, timeout=40)
+        b["storm_force_km"] = storm_force_km(track_png, b.get("wind_extent_km"))
+    except Exception as e:  # noqa: BLE001
+        log.warning("PAGASA track image not available: %s", e)
     for key, page, url, parse in (("advisory", advisory_html, ADVISORY_URL, parse_weather_advisory),
                                   ("regional", regional_html, REGIONAL_URL, parse_regional_warnings)):
         try:

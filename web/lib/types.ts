@@ -137,6 +137,8 @@ export interface TropicalCyclone {
   // from the bulletin PDF: forecast positions with coordinates, and how far the strong winds reach
   track?: { hours: number; time: string; lat: number; lon: number; where: string; wind_kmh: number; category: string; cat: string; outside_par: boolean }[];
   wind_extent_km?: number | null;
+  // storm-force winds (PAGASA's red circle), measured on PAGASA's track image
+  storm_force_km?: number | null;
   pressure_hpa?: number | null;
   track_geojson?: { type: "FeatureCollection"; features: { type: "Feature"; geometry: any; properties: Record<string, any> }[] };
 }
