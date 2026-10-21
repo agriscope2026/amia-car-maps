@@ -9,9 +9,9 @@ import { attachJobExports, publishDraft } from "./versionOps";
 
 /**
  * Automatic Special Farm Weather Outlook and Advisory. PAGASA issues its Tropical Cyclone Bulletin at 5 AM, 11 AM,
- * 5 PM and 11 PM (Philippine time); when "automatic" is on, a scheduled run 3 minutes later (vercel.json, with
- * retries at :15 and :30 in case PAGASA is late) fetches the new bulletin, makes the exports, publishes it and
- * deletes the older advisories.
+ * 5 PM and 11 PM (Philippine time); when "automatic" is on, a scheduled run 3 minutes later (an external scheduler
+ * calling /api/cron/tc-advisory, with retries at :15 and :30 in case PAGASA is late) fetches the new bulletin, makes
+ * the exports, publishes it and deletes the older advisories.
  *
  * A run can be cut short (serverless time limit, worker restart): the next run picks up the same bulletin where it
  * stopped – exports still running, or ready but not yet published.

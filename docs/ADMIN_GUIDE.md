@@ -282,6 +282,11 @@ Under **Automatic updating** (admin home, below the fetch button) an admin can c
 
 The box shows when it last ran and what happened. **Run now** does one run immediately (also while it is off).
 
+The timing comes from an external scheduler (Vercel's free plan allows only one cron run a day). Set it up once on
+cron-job.org (free): a job calling `https://<your site>/api/cron/tc-advisory`, request header
+`Authorization: Bearer <CRON_SECRET>`, at minutes 3, 15 and 30 of hours 5, 11, 17 and 23, time zone Asia/Manila.
+Without it, the switch has no effect – only **Run now** works.
+
 ## The 10-day rainfall feed
 
 The 10-day rainfall forecast is fetched automatically every morning from the Cordillera weather service. It gives
