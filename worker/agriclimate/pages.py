@@ -33,9 +33,11 @@ SQUARE = (1200, 1200)
 LANDSCAPE = (1920, 1080)
 PORTRAIT = (1240, 1754)
 PRODUCT_NAMES = {"rainfall_dekad": "10-day rainfall forecast", "rainfall_seasonal": "Seasonal rainfall forecast",
-                 "drought": "Drought forecast", "envi": "El Niño Vulnerability Index (ENVI)"}
+                 "drought": "Drought forecast", "envi": "El Niño Vulnerability Index (ENVI)",
+                 "tc_advisory": "Special Farm Weather Outlook and Advisory"}
 COVER_TITLES = {"rainfall_dekad": "10-DAY RAINFALL FORECAST", "rainfall_seasonal": "SEASONAL RAINFALL OUTLOOK",
-                "drought": "DROUGHT FORECAST", "envi": "EL NIÑO VULNERABILITY INDEX"}
+                "drought": "DROUGHT FORECAST", "envi": "EL NIÑO VULNERABILITY INDEX",
+                "tc_advisory": "SPECIAL FARM WEATHER OUTLOOK AND ADVISORY"}
 ACAP_URL = os.environ.get("ACAP_URL", "https://acap-car.github.io")
 PORTAL_URL = os.environ.get("PORTAL_URL", "https://amia-car-maps.vercel.app")
 AMBER = (232, 163, 23)
@@ -103,9 +105,10 @@ def _header(cv: Canvas, payload: dict, kicker: str) -> float:
             px, _, _, _ = cv.paste(p, x - 84, 34, 84, 76)
             x = px - 14
     t = payload.get("texts", {})
-    cv.text(W / 2, 48, kicker.upper(), "bold", _fit(cv, kicker.upper(), "bold", 26, W - 400, 18), AMBER, anchor="mm")
+    room = W - 2 * 250                       # clear of the logos on both sides
+    cv.text(W / 2, 48, kicker.upper(), "bold", _fit(cv, kicker.upper(), "bold", 26, room, 16), AMBER, anchor="mm")
     title = t.get("title") or payload.get("title", "")
-    cv.text(W / 2, 92, title, "bold", _fit(cv, title, "bold", 40, W - 400, 22), GREEN_DARK, anchor="mm")
+    cv.text(W / 2, 92, title, "bold", _fit(cv, title, "bold", 40, room, 20), GREEN_DARK, anchor="mm")
     sub = f"{payload['period']['label']}  ·  as of {_date(payload.get('issued', ''))}"
     cv.text(W / 2, 136, sub, "semibold", _fit(cv, sub, "semibold", 26, W - 400, 18), MUTED, anchor="mm")
     cv.d.line([(40 * cv.s, 166 * cv.s), ((W - 40) * cv.s, 166 * cv.s)], fill=GREEN, width=int(5 * cv.s))
@@ -117,17 +120,17 @@ def _source_line(payload: dict) -> str:
             else "Weather source: DOST-PAGASA")
 
 
-def _footer(cv: Canvas, payload: dict, page: str):
+def _footer(cv: Canvas, payload: dict, page: str = ""):
+    """Sources (left) and DA-RFO-CAR · AMIA (right). ``page`` is not printed (the page names were noise)."""
     W, H = cv.W, cv.H
     t = payload.get("texts", {})
     y = H - 80
     cv.d.line([(40 * cv.s, y * cv.s), ((W - 40) * cv.s, y * cv.s)], fill=(205, 212, 206), width=max(1, int(2 * cv.s)))
     src = f"Sources: {t.get('sources') or payload.get('source', '')}"
-    lab_w = max(cv.width(page, "bold", 22), cv.width("DA-RFO-CAR · AMIA", "regular", 18)) + 40
+    lab_w = cv.width("DA-RFO-CAR · AMIA", "semibold", 20) + 40
     for i, l in enumerate(cv.wrap(src, "italic", 18, W - 80 - lab_w)[:2]):
-        cv.text(40, y + 12 + i * 24, l, "italic", 18, MUTED)
-    cv.text(W - 40, y + 12, page, "bold", 22, GREEN_DARK, anchor="ra")
-    cv.text(W - 40, y + 42, "DA-RFO-CAR · AMIA", "regular", 18, MUTED, anchor="ra")
+        cv.text(40, y + 14 + i * 24, l, "italic", 18, MUTED)
+    cv.text(W - 40, y + 14, "DA-RFO-CAR · AMIA", "semibold", 20, GREEN_DARK, anchor="ra")
 
 
 def _table(cv: Canvas, x, y, cols: list[tuple[str, float, str]], rows: list[list], size=15, row_h=None,
@@ -252,17 +255,31 @@ def _qr_block(cv: Canvas, x: float, y: float, w: float, size: float, caption: st
     cv.paste(_qr(url), x + (w - size) / 2, y + 84, size, size)
 
 
-def title_page(payload: dict, out_dir: Path, size=SQUARE, suffix: str = "") -> dict:
-    """Cover page: program header, product title, period, legend, QR codes and the weather source."""
+def title_page(payload: dict, out_dir: Path, size=SQUARE, suffix: str = "", qr: bool = True,
+               notes: list[str] | None = None) -> dict:
+    """Cover page: program header, product title, period, legend, QR codes and the weather source.
+
+    ``qr=False``: no QR codes – the legend is centred and ``notes`` (the outlook in a few lines) go below it."""
     cv = _canvas(size)
     W, H = cv.W, cv.H
     y = _cover_band(cv) + (40 if H < 1300 else 90)
     title = COVER_TITLES.get(payload["type"], payload.get("title", "").upper())
     fs = 96
-    while cv.d.textlength(title, font=_extrabold(cv, fs)) / cv.s > W - 160 and fs > 40:
+    tw = lambda t, f: cv.d.textlength(t, font=_extrabold(cv, f)) / cv.s  # noqa: E731
+    while tw(title, fs) > W - 160 and fs > 40:
         fs -= 2
-    cv.d.text((W / 2 * cv.s, y * cv.s), title, font=_extrabold(cv, fs), fill=_hex("#0b6237"), anchor="ma")
-    y += fs * 1.2
+    lines = [title]
+    if fs < 64 and " " in title:
+        # a long title reads better on two lines than in small type on one
+        words = title.split()
+        cut = min(range(1, len(words)), key=lambda i: max(tw(" ".join(words[:i]), 60), tw(" ".join(words[i:]), 60)))
+        lines = [" ".join(words[:cut]), " ".join(words[cut:])]
+        fs = 96
+        while max(tw(l, fs) for l in lines) > W - 160 and fs > 40:
+            fs -= 2
+    for l in lines:
+        cv.d.text((W / 2 * cv.s, y * cv.s), l, font=_extrabold(cv, fs), fill=_hex("#0b6237"), anchor="ma")
+        y += fs * 1.2
     # "for Cordillera Administrative Region" banner with the three dots
     sub = "for Cordillera Administrative Region"
     pw = min(W - 200, max(560, cv.width(sub, "bold", 30) + 200))
@@ -287,7 +304,36 @@ def title_page(payload: dict, out_dir: Path, size=SQUARE, suffix: str = "") -> d
     bottom = H - 140
     avail = bottom - y
     links = (("Visit the ACAP website:", ACAP_URL), ("View the interactive maps:", PORTAL_URL))
-    if H > W * 1.2:      # portrait (A4): a full-width legend, the two QR codes side by side below it
+    if not qr:           # centred legend (as wide as its text), then the outlook in a few lines
+        lh = _legend_height(payload, avail * 0.5, 50)
+        lg, items = _legend_items(payload)
+        row = min(50, (lh - 100) / max(len(items), 1))
+        widest = max([cv.width(c["label"], "regular", min(30, row * 0.56)) + 110 for c in items]
+                     + [cv.width(payload.get("texts", {}).get("legend_title") or lg.get("title") or "", "semibold", 22),
+                        cv.width("LEGEND", "bold", 26)])
+        lw = min(W - 80, widest + 60)
+        fs = 30
+        nl = [cv.wrap(n, "regular", fs, W - 180) for n in notes or []]
+        while fs > 18 and lh + 60 + 70 + sum(len(l) for l in nl) * fs * 1.32 + len(nl) * 12 > avail:
+            fs -= 1
+            nl = [cv.wrap(n, "regular", fs, W - 180) for n in notes or []]
+        nh = (70 + sum(len(l) for l in nl) * fs * 1.32 + len(nl) * 12 + 20) if nl else 0
+        top = y + max(0, (avail - lh - 30 - nh) / 2)
+        _legend_panel(cv, payload, (W - lw) / 2, top, lw, lh, 50)
+        if nl:
+            ny = top + lh + 30
+            cv.rrect(40, ny, W - 80, nh, _hex("#0d274d"), r=16)
+            cv.text(W / 2, ny + 18, "SUMMARY", "bold", 26, (255, 214, 102), anchor="ma")
+            yy = ny + 70
+            for lines in nl:
+                r = fs * 0.18
+                cv.d.ellipse([(72 - r) * cv.s, (yy + fs * 0.6 - r) * cv.s, (72 + r) * cv.s, (yy + fs * 0.6 + r) * cv.s],
+                             fill=(255, 214, 102))
+                for l in lines:
+                    cv.text(92, yy, l, "regular", fs, PANEL_TEXT)
+                    yy += fs * 1.32
+                yy += 12
+    elif H > W * 1.2:    # portrait (A4): a full-width legend, the two QR codes side by side below it
         lh = _legend_height(payload, avail * 0.45, 52)
         half = (W - 80 - 40) / 2
         qs = min(360, half - 60, avail - lh - 150)
@@ -443,6 +489,69 @@ def _envi_text(payload: dict) -> tuple[list[str], list[str]]:
     if top[1].get("envi") is not None:
         exp.append(f"Most vulnerable: {_name(top[0])} (ENVI {top[1]['envi']:.2f}).")
     return cur, exp
+
+
+def _tc_text(payload: dict) -> tuple[list[str], list[str]]:
+    """Tropical cyclone: where the storm is now and what CAR can expect."""
+    tc = payload.get("tc") or {}
+    s = payload.get("summary") or {}
+    storm = f"{tc.get('category') or 'The tropical cyclone'} {(tc.get('name') or '').title()}".strip()
+    cur = []
+    if tc.get("location_text"):
+        cur.append(f"{storm} was {tc['location_text']} as of {tc.get('issued_text') or _date(payload.get('issued', ''))}.")
+    if tc.get("strength"):
+        cur.append(tc["strength"].rstrip(".") + ".")
+    if tc.get("movement"):
+        cur.append(tc["movement"].rstrip(".") + ".")
+    by = s.get("car_by_signal") or {}
+    if by:
+        for n, keys in sorted(by.items(), key=lambda kv: -int(kv[0])):
+            by_prov: dict[str, list[str]] = {}
+            for k in keys:
+                by_prov.setdefault(reference.province_display(reference.province_of(k)), []).append(_short(k))
+            where = "; ".join(f"{p}: {', '.join(sorted(t))}" for p, t in sorted(by_prov.items()))
+            cur.append(f"Wind Signal No. {n} in CAR – {where}.")
+    else:
+        cur.append("No Tropical Cyclone Wind Signal is raised over CAR.")
+    exp = []
+    for g in s.get("car_gusts") or []:
+        exp.append(f"{g['day']} ({g['date']}): strong to gale-force gusts over CAR, especially in upland and exposed areas.")
+    rain = s.get("car_rainfall") or {}
+    for prov, days in sorted(rain.items()):
+        by: dict[str, list[str]] = {}
+        for d, c in days:
+            by.setdefault(c, []).append(d.lower() if d.lower().startswith("to") else d)
+        exp.append(f"Heavy rain in {prov}: " + "; ".join(f"{c} {_list(ds)}" for c, ds in by.items())
+                   + " – flooding in low-lying areas and landslides on steep slopes are possible.")
+    if s.get("car_rain") and not rain:
+        exp.append("Heavy rain is expected over parts of CAR (see the PAGASA rainfall advisory).")
+    outlook = " ".join(tc.get("outlook") or [])
+    # PAGASA's track outlook, without its standard caveats ("It must be emphasized …", "Refer to …")
+    boiler = ("it must be emphasized", "refer to", "furthermore", "the track may")
+    said = [x.strip().rstrip(".") + "." for x in re.split(r"(?<=\.)\s+", outlook) if x.strip()
+            and not x.strip().lower().startswith(boiler)]
+    exp += said[:2]
+    if tc.get("highest_possible"):
+        exp.append(tc["highest_possible"])
+    exp.append("Follow the PAGASA bulletins (every 6 hours): signals may be raised, lifted or upgraded.")
+    return cur, exp
+
+
+def _tc_figures(f: "Flow", payload: dict, level: int = 0):
+    """Forecast positions (level 0 only)."""
+    tc = payload.get("tc") or {}
+    pos = tc.get("forecast") or []
+    if not pos or level >= 1:
+        return
+    f.heading("Forecast positions (DOST-PAGASA)", keep=f.table_keep(len(pos)))
+    def when(t: str) -> str:            # "Oct 21, 2026 02:00 PM" → "Oct 21, 2 PM"
+        m = re.match(r"(\w{3} \d{1,2}), \d{4} (\d{1,2}):(\d{2}) ([AP]M)", t)
+        return f"{m.group(1)}, {int(m.group(2))}{'' if m.group(3) == '00' else ':' + m.group(3)} {m.group(4)}" if m else t
+
+    def where(w: str) -> str:
+        return re.sub(r"\s*\(OUTSIDE PAR\)", " – outside PAR", w).replace("Extreme Northern Luzon", "Extreme N. Luzon")
+
+    f.table([("When", 220, "l"), ("Expected location", 820, "l")], [[when(p["time"]), where(p["where"])] for p in pos])
 
 
 # ------------------------------------------------- phone-first page flow ---
@@ -685,16 +794,16 @@ def summary_pages(payload: dict, out_dir: Path, size=SQUARE, suffix: str = "") -
 
     Tried in order (measured on a tiny canvas first, drawn once): all figures at phone-readable text (40 → 28),
     then with fewer figures (e.g. no ENVI top 10, then none) at 40 → 28, then smaller text (26 → 20)."""
-    text = {"drought": _drought_text, "envi": _envi_text}.get(payload["type"], _rain_text)
-    figures = {"drought": _drought_figures, "envi": _envi_figures}.get(payload["type"], _rain_figures)
+    text = {"drought": _drought_text, "envi": _envi_text, "tc_advisory": _tc_text}.get(payload["type"], _rain_text)
+    figures = {"drought": _drought_figures, "envi": _envi_figures, "tc_advisory": _tc_figures}.get(payload["type"], _rain_figures)
     cur, exp = text(payload)
 
     def build(level: int):
         def run(f: Flow):
-            f.heading("Current condition")
+            f.heading("Where the storm is now" if payload["type"] == "tc_advisory" else "Current condition")
             f.bullets(cur)
             f.gap(10)
-            f.heading("Expected forecast")
+            f.heading("What CAR can expect" if payload["type"] == "tc_advisory" else "Expected forecast")
             f.bullets(exp)
             f.gap(10)
             figures(f, payload, level)

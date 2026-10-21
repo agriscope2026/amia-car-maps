@@ -16,11 +16,11 @@ export default async function ActivitiesAdminPage() {
     <>
       <AdminBar email={user.email} role={user.role} />
       <main className="page">
-        <h1>Activities</h1>
+        <h1>El Niño Action Plan – activities</h1>
         <p className="muted">
-          Activities in the municipalities – to conduct, ongoing, completed or postponed – and the map they respond to. They appear
-          on the public <a href="/activities">activities page</a> next to the vulnerable areas of the published maps as soon as they
-          are saved.
+          The El Niño Action Plan: activities in the municipalities – to conduct, ongoing, completed or postponed. They appear on
+          the public <a href="/activities">El Niño Action Plan Dashboard</a> next to the municipalities at risk on the latest El Niño
+          Vulnerability Index (ENVI) map as soon as they are saved.
         </p>
         <ActivitiesAdmin geo={geo} />
       </main>

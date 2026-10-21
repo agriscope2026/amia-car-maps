@@ -20,7 +20,7 @@ export default function TopNav({ active, mapsHref = "/", activitiesHref = "/acti
 }) {
   const items = [
     { id: "maps", label: "Maps", href: mapsHref },
-    { id: "activities", label: "Activities", href: activitiesHref },
+    { id: "activities", label: "Action Plan", href: activitiesHref }, // El Niño Action Plan Dashboard
     { id: "about", label: "About", href: "/about" },
   ] as const;
   return (

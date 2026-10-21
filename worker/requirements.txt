@@ -13,6 +13,7 @@ shapely>=2.0
 matplotlib>=3.8
 pillow>=10.0
 segno>=1.6           # QR codes on the title pages
+pypdf>=5             # PAGASA tropical cyclone bulletin PDF: forecast track (lat/lon) and extent of the winds
 pytest>=8.0
 # OCR of PAGASA's seasonal forecast tables (published as images)
 rapidocr>=3.0

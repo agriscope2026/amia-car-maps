@@ -11,14 +11,16 @@ import { workerRaw } from "./worker";
 /** Per-map files in the worker manifest: [kind, label, preview-only]. Previews feed photo mode, not downloads. */
 export const MAP_FILES: [string, string, boolean][] = [
   ["png", "Map – PNG (400 dpi)", false],
-  ["pdf", "Map – PDF", false],
+  ["pdf", "PDF (print)", false],
   ["presentation", "Presentation – PNG (5760×3240)", false],
   ["presentation_pdf", "Presentation – PDF", false],
   ["poster", "A4 poster – PNG (450 dpi)", false],
   ["poster_pdf", "A4 poster – PDF", false],
+  ["social", "Facebook post – PNG (1080×1350, 2×)", false],
   ["jpg", "Map preview", true],
   ["presentation_web", "Presentation preview", true],
   ["poster_web", "Poster preview", true],
+  ["social_web", "Facebook preview", true],
 ];
 
 /** Every file name a manifest refers to (to copy or publish them). */
@@ -30,11 +32,16 @@ export function manifestFiles(m: any): string[] {
 /** Manifest → download list: per map its PNG and PDF (ENVI: presentation + poster), then one ZIP of all maps. */
 export function downloadsFromManifest(m: any, href: (file: string) => string): Download[] {
   const out: Download[] = [];
+  // tropical cyclone outlook: the one A4 page comes as PDF (print) and PNG
+  const tcLabels: Record<string, string> = { pdf: "A4 – PDF (print)", poster: "A4 – PNG (3720×5262, 450 dpi)" };
   for (const mp of m.maps ?? []) {
     for (const [k, label, preview] of MAP_FILES)
-      if (mp[k]) out.push({ label, url: href(mp[k]), alt: mp.alt, group: mp.label, layer: mp.layer, kind: k, preview });
+      if (mp[k])
+        out.push({ label: (m.type === "tc_advisory" && tcLabels[k]) || label, url: href(mp[k]), alt: mp.alt, group: mp.label,
+          layer: mp.layer, kind: k, preview });
   }
-  const zipLabel = m.type === "envi" ? "All presentations and A4 posters + computation Excel (ZIP)" : "All maps – PNG and PDF (ZIP)";
+  const zipLabel = m.type === "envi" ? "All presentations and A4 posters + computation Excel (ZIP)"
+    : m.type === "tc_advisory" ? "A4 page (PDF) and all Facebook posts (ZIP)" : "All maps – PNG and PDF (ZIP)";
   if (m.files?.zip) out.push({ label: zipLabel, url: href(m.files.zip), group: "Whole product", kind: "zip" });
   return out;
 }

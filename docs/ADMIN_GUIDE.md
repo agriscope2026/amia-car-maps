@@ -230,6 +230,42 @@ Things to know:
   the Products page (author "cron"). Nothing is published until an administrator publishes it.
 - **If PAGASA changes its page,** the fetch reports that it could not find the table. Upload the template instead.
 
+## Special Farm Weather Outlook and Advisory (tropical cyclone)
+
+When PAGASA has a tropical cyclone bulletin in effect, click **Fetch the latest PAGASA tropical cyclone bulletin** on
+the admin home page. The portal reads PAGASA's bulletin page and makes a draft with:
+
+- the storm (category, name, bulletin number and time, position, movement, strength, forecast positions);
+- the **CAR municipalities under each wind signal**, read from PAGASA's signal list (whole provinces, named towns
+  in brackets, "the rest of …" and Baguio City), shown on a CAR map;
+- whether PAGASA's gust and heavy-rain outlook names CAR;
+- the **forecast track** (centre positions from the bulletin PDF) and its **buffer**: how far the strong winds
+  reach along the track ("strong to typhoon-force winds extend outwards up to 780 km"), and how close the storm
+  comes to CAR;
+- a farm advisory for CAR (what to do now, by the highest signal) and crop advice for rice, corn, HVC and livestock.
+
+**Always check the signals against PAGASA's bulletin** (the preview map and the list) before you save the draft.
+Then edit the texts if needed, generate the exports and publish, as with the other maps.
+
+The exports are:
+
+- **One A4 page for printing (PDF and PNG)**, with the DA-RFO-CAR / AMIA letterhead and everything on one sheet:
+  the storm, the track map with its buffer, the CAR wind-signal map, position / movement / strength / closest
+  approach, the CAR areas under each signal, the heavy rainfall for CAR, and what farmers should do – now, during
+  and after the storm.
+- **Facebook posts** (4:5, 2160 × 2700 px, the size Facebook shows without cropping), with no title page so the track
+  is the first thing people see: (1) the advisory – track map, CAR wind-signal map with its legend, and the outlook
+  summary; (2) what farmers should do now; (3) during and after the storm.
+
+The farm advice is drafted from the situation: the wind signal, PAGASA's **Weather Advisory** (forecast rain per day
+by province, e.g. "Apayao 50–100 mm today and tomorrow"), any Heavy Rainfall Warning or Thunderstorm Advisory of
+PAGASA Northern Luzon, the gust outlook and how many hours until the storm is closest to CAR. The nearer the danger,
+the more urgent the wording ("NOW – within the next 12 hours"). Edit it in the draft if needed before exporting.
+
+On the dashboard the map zooms out to show the track, its buffer and CAR together. Everything keeps a margin
+from the edges, so nothing is cut off when posted or printed. PAGASA issues a bulletin every 6 hours, so fetch
+again and publish a new version as the storm moves.
+
 ## The 10-day rainfall feed
 
 The 10-day rainfall forecast is fetched automatically every morning from the Cordillera weather service. It gives
@@ -287,16 +323,15 @@ On **Reference data** you can update:
 
 Always click **Validate** first, then **Save**.
 
-## Activities
+## El Niño Action Plan (activities)
 
-**Activities** (editors and administrators) is where the activities in the municipalities are recorded – for example
+**El Niño action plan** (editors and administrators) is where the El Niño activities in the municipalities are recorded – for example
 seed distribution, trainings, water-system repairs or insurance enrolment. Each activity has:
 
 - **where it takes place**: one or more municipalities, in one or more provinces (a training in three towns, a
   province-wide forum or a region-wide campaign is still *one* activity, so its farmers and budget are counted once);
 - the **activity** itself and an optional **category** (Training, Distribution of inputs, Infrastructure …);
 - the **status**: *To conduct*, *Ongoing*, *Completed* or *Postponed*;
-- the **map it responds to**: ENVI, Drought, 10-day rainfall, Seasonal rainfall, or *All maps (general)*;
 - optional start and end dates, number of farmer beneficiaries, budget (PHP), implementing office and remarks.
 
 Two ways to enter them:
@@ -312,11 +347,10 @@ Two ways to enter them:
    (`Abra; Benguet`); `All` in both means the whole CAR. Each row stays one activity. Errors name the spreadsheet row, and nothing is saved until the whole file is
    valid. Tick *Replace all current activities* to upload a complete master list instead of adding to the current one.
 
-Saved activities appear at once on the public **Activities** page. That page takes the latest published map
-(ENVI, drought or rainfall) and shows how many municipalities are at risk, how many of them have an activity and
-which have none yet, with charts by status, province, category and month. Visitors can choose which map colours
-count as "at risk" (by default the two highest ENVI and drought classes, and the heavier half of the rainfall
-classes). An activity counts as covering each of its municipalities unless it is *Postponed*; the figures for
+Saved activities appear at once on the public **El Niño Action Plan Dashboard** (the *Action Plan* button). It takes
+the latest published El Niño Vulnerability Index (ENVI) map and shows how many municipalities are at risk, how many of them have an activity and
+which have none yet, with charts by status, province, category and month. Visitors can choose which ENVI classes
+count as "at risk" (by default High and Very High). An activity counts as covering each of its municipalities unless it is *Postponed*; the figures for
 farmers and budget count each activity once, in full. The activities, including
 beneficiaries and budget, are public.
 

@@ -248,7 +248,7 @@ export default function Dashboard({ geo }: { geo: Gazetteer }) {
           <h1>{payload?.texts.title ?? "AMIA CAR MAPS"}</h1>
           <p>{payload ? `${payload.period.label} · as of ${fmtDate(payload.issued)}` : "DA-RFO-CAR · AMIA Program"}</p>
         </div>
-        <TopNav active="maps" activitiesHref={type ? `/activities?map=${type}` : "/activities"} />
+        <TopNav active="maps" />
         <button className="guide-btn" data-tour="help" onClick={openTour} aria-label="How to use this site">
           <span aria-hidden>?</span>
           <span className="guide-label">How to use</span>

@@ -99,7 +99,9 @@ export async function seedSampleActivities(client, repo) {
   for (const [title, category, hazard, nProv, nTowns, days, budget, office] of multi) {
     let keys;
     if (nProv) {
-      const ps = [...provinces].sort(() => rand() - 0.5).slice(0, nProv);
+      // province-wide activities go to the provinces with the fewest places at risk, so the sample keeps some gaps
+      const atRisk = (p) => keys0(risk).filter((k) => towns.get(k)?.province === p).length;
+      const ps = [...provinces].sort((a, b) => atRisk(a) - atRisk(b) || rand() - 0.5).slice(0, nProv);
       keys = geo.gazetteer.filter((g) => ps.includes(g.province)).map((g) => g.area_key);
     } else {
       // neighbouring at-risk towns of one province

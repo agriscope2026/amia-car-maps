@@ -2,12 +2,12 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
-  ACTIVITY_STATUSES, activitiesFor, coverage, defaultVulnerableClasses, emptyCounts, hazardLabel, inAny, placesSummary,
+  ACTIVITY_STATUSES, coverage, defaultVulnerableClasses, emptyCounts, inAny, placesSummary,
   worstClasses,
   type Activity, type StatusCounts,
 } from "@/lib/activities";
 import { fmtDate, fmtNumber, sortIssues, withoutTotals } from "@/lib/format";
-import { PRODUCT_TYPES, type CatalogEntry, type Gazetteer, type Layer, type Payload, type ProductType } from "@/lib/types";
+import { type CatalogEntry, type Gazetteer, type Layer, type Payload, type ProductType } from "@/lib/types";
 import { dateRange, StatusChip } from "./ActivityBits";
 import TopNav from "./TopNav";
 
@@ -19,20 +19,6 @@ const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "
 
 /** Months / days of an issue (one map each); season and %-of-normal maps are left out of "all". */
 const periodLayers = (p: Payload) => p.layers.filter((l) => /^(m|d)_/.test(l.id));
-
-/** What "at risk" means on each map, in everyday words. */
-const RISK_WORDS: Record<ProductType, string> = {
-  envi: "high El Niño vulnerability",
-  drought: "a dry spell or drought forecast",
-  rainfall_dekad: "heavy rain forecast",
-  rainfall_seasonal: "heavy rainfall forecast",
-};
-const MAP_NAMES: Record<ProductType, string> = {
-  envi: "El Niño (ENVI)",
-  drought: "Drought",
-  rainfall_dekad: "10-day rain",
-  rainfall_seasonal: "Seasonal rain",
-};
 
 const money = (n: number) =>
   n >= 1e9 ? `₱${fmtNumber(n / 1e9, 1)}B` : n >= 1e6 ? `₱${fmtNumber(n / 1e6, 1)}M` : n >= 1e4 ? `₱${fmtNumber(n / 1e3, 0)}K` : `₱${fmtNumber(n, 0)}`;
@@ -277,12 +263,11 @@ type View = "risk" | "gaps" | "covered" | "all";
 export default function ActivitiesDashboard({ geo }: { geo: Gazetteer }) {
   const [catalog, setCatalog] = useState<CatalogEntry[] | null>(null);
   const [acts, setActs] = useState<Activity[] | null>(null);
-  const [type, setType] = useState<ProductType | null>(null);
+  const type: ProductType = "envi"; // the El Niño Action Plan follows the El Niño Vulnerability Index only
   const [productId, setProductId] = useState<string | null>(null);
   const [payload, setPayload] = useState<Payload | null>(null);
   const [layerId, setLayerId] = useState<string | null>(null);
   const [classes, setClasses] = useState<string[] | null>(null);
-  const [thisMapOnly, setThisMapOnly] = useState(true);
   const [view, setView] = useState<View>("risk");
   const [prov, setProv] = useState("");
   const [q, setQ] = useState("");
@@ -292,14 +277,9 @@ export default function ActivitiesDashboard({ geo }: { geo: Gazetteer }) {
   const listRef = useRef<HTMLElement>(null);
 
   useEffect(() => {
-    const want = new URLSearchParams(window.location.search).get("map") as ProductType | null;
     fetch("/api/public/catalog")
       .then((r) => (r.ok ? r.json() : Promise.reject(new Error(`Catalog: HTTP ${r.status}`))))
-      .then((d) => {
-        setCatalog(d.products);
-        const has = (t: string) => d.products.some((p: CatalogEntry) => p.type === t);
-        setType((want && has(want) ? want : PRODUCT_TYPES.find((t) => has(t.id))?.id) ?? null);
-      })
+      .then((d) => setCatalog(d.products))
       .catch((e) => setError(String(e.message ?? e)));
     fetch("/api/public/activities")
       .then((r) => (r.ok ? r.json() : Promise.reject(new Error(`Activities: HTTP ${r.status}`))))
@@ -320,8 +300,7 @@ export default function ActivitiesDashboard({ geo }: { geo: Gazetteer }) {
         if (cancelled) return;
         const pl = withoutTotals({ ...p, id: entry.id });
         setPayload(pl);
-        // outlooks (drought, rainfall): the worst month by default; ENVI: the whole-season map
-        setLayerId(pl.type !== "envi" && periodLayers(pl).length > 1 ? ALL : pl.layers[0]?.id ?? null);
+        setLayerId(pl.layers[0]?.id ?? null);   // the whole-season ENVI
         setClasses(null);
       })
       .catch((e) => !cancelled && setError(String(e.message ?? e)));
@@ -329,10 +308,6 @@ export default function ActivitiesDashboard({ geo }: { geo: Gazetteer }) {
       cancelled = true;
     };
   }, [entry?.id]);
-
-  useEffect(() => {
-    if (type) window.history.replaceState(null, "", `?map=${type}`);
-  }, [type]);
 
   const layers: Layer[] = useMemo(() => {
     if (!payload) return [];
@@ -366,7 +341,7 @@ export default function ActivitiesDashboard({ geo }: { geo: Gazetteer }) {
         .sort((a, b) => byArea[b].rank - byArea[a].rank || (byKey.get(a)?.name ?? "").localeCompare(byKey.get(b)?.name ?? "")),
     [allRisk, prov, byKey, byArea],
   );
-  const relevant = useMemo(() => (acts ? activitiesFor(acts, thisMapOnly && type ? type : "all") : []), [acts, thisMapOnly, type]);
+  const relevant = useMemo(() => acts ?? [], [acts]);
   const cov = useMemo(() => coverage(vulnerable, relevant), [vulnerable, relevant]);
   const atRiskActs = useMemo(() => {
     const set = new Set(vulnerable);
@@ -418,12 +393,10 @@ export default function ActivitiesDashboard({ geo }: { geo: Gazetteer }) {
     setTimeout(() => document.getElementById(`area-${k}`)?.scrollIntoView({ behavior: "smooth", block: "center" }), 60);
   };
 
-  const available = PRODUCT_TYPES.filter((t) => catalog?.some((p) => p.type === t.id));
   const loading = !error && (catalog === null || acts === null || (entry && !payload));
   const total = ACTIVITY_STATUSES.reduce((s, x) => s + cov.counts[x.id], 0);
   const where = prov ? ` in ${prov}` : "";
-  const riskWords = type ? RISK_WORDS[type] : "";
-  const mapsHref = type ? `/?type=${type}${entry ? `&p=${encodeURIComponent(entry.id)}` : ""}` : "/";
+  const mapsHref = `/?type=envi${entry ? `&p=${encodeURIComponent(entry.id)}` : ""}`;
   const towns = prov ? geo.gazetteer.filter((g) => g.province === prov).length : geo.gazetteer.length;
   const pct = cov.vulnerable ? Math.round((cov.covered / cov.vulnerable) * 100) : 0;
 
@@ -436,7 +409,7 @@ export default function ActivitiesDashboard({ geo }: { geo: Gazetteer }) {
           <img src="/logos/amia.webp" alt="AMIA – Adaptation and Mitigation Initiative in Agriculture" width={44} height={44} />
         </div>
         <div className="titles">
-          <h1>Activities in areas at risk</h1>
+          <h1>El Niño Action Plan Dashboard</h1>
           <p>DA-RFO-CAR · AMIA Program</p>
         </div>
         <TopNav active="activities" mapsHref={mapsHref} />
@@ -451,7 +424,8 @@ export default function ActivitiesDashboard({ geo }: { geo: Gazetteer }) {
           <section className="ad-help">
             <h2>How to read this page</h2>
             <ol>
-              <li><strong>Pick a map</strong> – El Niño, drought or rain. The page finds the municipalities that map puts <strong>at risk</strong>.</li>
+              <li>The page follows the latest <strong>El Niño Vulnerability Index (ENVI)</strong> map and finds the municipalities
+                that are <strong>at risk</strong> (High or Very High vulnerability).</li>
               <li><strong>Green</strong> places already have an activity of the Department of Agriculture (to conduct, ongoing or done).
                 <strong> Red</strong> places are at risk but have no activity yet – they need attention first.</li>
               <li><strong>Tap a place</strong> on the map or in the list to see its activities. Tap a <strong>province</strong> to see only its places.</li>
@@ -464,22 +438,14 @@ export default function ActivitiesDashboard({ geo }: { geo: Gazetteer }) {
 
         <section className="ad-hero">
           <div className="ad-hero-text">
-            <div className="ad-tabs" role="tablist" aria-label="Map">
-              {PRODUCT_TYPES.map((t) => (
-                <button key={t.id} role="tab" aria-selected={t.id === type} className={t.id === type ? "on" : ""}
-                  disabled={!available.some((a) => a.id === t.id)}
-                  onClick={() => { setType(t.id); setProductId(null); setClasses(null); setOpen(null); }}>
-                  {MAP_NAMES[t.id]}
-                </button>
-              ))}
-            </div>
+            <p className="ad-kicker">El Niño Action Plan · El Niño Vulnerability Index (ENVI)</p>
             {payload && acts ? (
               <h2 className="ad-headline">
                 {cov.vulnerable === 0 ? (
                   <>No municipality{where} is at risk on this map.</>
                 ) : (
                   <>
-                    <b>{plural(cov.vulnerable, "municipality", "municipalities")}</b>{where} {cov.vulnerable === 1 ? "has" : "have"} {riskWords}.{" "}
+                    <b>{plural(cov.vulnerable, "municipality", "municipalities")}</b>{where} {cov.vulnerable === 1 ? "has" : "have"} high El Niño vulnerability.{" "}
                     <span className="ok">{fmtNumber(cov.covered, 0)} {cov.covered === 1 ? "has" : "have"} an activity</span>
                     {cov.gaps.length > 0 ? (
                       <>, <span className="bad">{fmtNumber(cov.gaps.length, 0)} still {cov.gaps.length === 1 ? "needs" : "need"} one</span>.</>
@@ -490,7 +456,7 @@ export default function ActivitiesDashboard({ geo }: { geo: Gazetteer }) {
                 )}
               </h2>
             ) : (
-              <h2 className="ad-headline">{loading ? "Loading…" : "No maps have been published yet."}</h2>
+              <h2 className="ad-headline">{loading ? "Loading…" : "No El Niño Vulnerability Index (ENVI) map has been published yet."}</h2>
             )}
             {payload && (
               <div className="ad-hero-meta">
@@ -687,10 +653,6 @@ export default function ActivitiesDashboard({ geo }: { geo: Gazetteer }) {
                   <option value="">All provinces</option>
                   {provinces.map((p) => <option key={p}>{p}</option>)}
                 </select>
-                <label className="ad-switch">
-                  <input type="checkbox" checked={!thisMapOnly} onChange={(e) => setThisMapOnly(!e.target.checked)} />
-                  <span>Include activities for other maps</span>
-                </label>
               </div>
               {rows.length === 0 ? (
                 <p className="ad-empty">{view === "gaps" ? "Every place at risk has an activity. 🎉" : "No place matches."}</p>
@@ -739,8 +701,7 @@ export default function ActivitiesDashboard({ geo }: { geo: Gazetteer }) {
                                     <div className="ad-meta">
                                       {[a.category, dateRange(a), a.office,
                                         a.beneficiaries != null && `${fmtNumber(a.beneficiaries, 0)} farmers`,
-                                        a.budget != null && `₱${fmtNumber(a.budget, 0)}`,
-                                        !thisMapOnly && hazardLabel(a.hazard)]
+                                        a.budget != null && `₱${fmtNumber(a.budget, 0)}`]
                                         .filter(Boolean).map((x, i) => <span key={i}>{x}</span>)}
                                     </div>
                                     {a.area_keys.length > 1 && (
@@ -754,7 +715,7 @@ export default function ActivitiesDashboard({ geo }: { geo: Gazetteer }) {
                               ))}
                             </ul>
                           ) : (
-                            <p className="ad-list ad-muted">No activity recorded for this place{thisMapOnly ? " and map" : ""} yet.</p>
+                            <p className="ad-list ad-muted">No activity recorded for this place yet.</p>
                           )}
                         </details>
                       </li>

@@ -39,6 +39,57 @@ function ClassBars({ layer }: { layer: Layer }) {
 }
 
 export function Summary({ payload, layer, crops, names }: { payload: Payload; layer: Layer; crops: CropsLayer | null; names: Names }) {
+  if (payload.type === "tc_advisory" && payload.tc) {
+    // the storm (PAGASA bulletin) and the CAR municipalities under each wind signal
+    const tc = payload.tc;
+    const signals = Object.entries(layer.values).filter(([, v]) => v.class !== "No wind signal");
+    const byClass = new Map<string, string[]>();
+    for (const [k, v] of signals) byClass.set(v.class, [...(byClass.get(v.class) ?? []), nameOf(payload, k)]);
+    const legend = new Map(layer.legend.classes.map((c) => [c.label, c.color]));
+    return (
+      <div className="summary">
+        <div className="tc-box">
+          <strong>
+            {tc.category} “{(tc.name ?? "").toLowerCase().replace(/^\w/, (c) => c.toUpperCase())}”
+          </strong>
+          <span>PAGASA Bulletin #{tc.bulletin_no} · {tc.issued_text}</span>
+        </div>
+        <div className="cards">
+          <div className={`card${signals.length ? " risk" : ""}`}>
+            <div className="big">{signals.length}</div>
+            <div>CAR municipalities under a wind signal</div>
+          </div>
+          <div className="card">
+            <div className="big">{tc.max_wind_kmh ? `${tc.max_wind_kmh} km/h` : "–"}</div>
+            <div>max winds{tc.gust_kmh ? `, gusts ${tc.gust_kmh} km/h` : ""}</div>
+          </div>
+        </div>
+        {[...byClass.entries()].sort((a, b) => b[0].localeCompare(a[0])).map(([cls, towns]) => (
+          <p key={cls} className="tc-signal">
+            <i style={{ background: legend.get(cls) }} aria-hidden /> <strong>{cls}:</strong> {towns.sort().join(", ")}
+          </p>
+        ))}
+        {!signals.length && <p className="hint">No wind signal is raised over CAR in this bulletin.</p>}
+        <p className="small">
+          <strong>Location:</strong> {tc.location_text}
+          <br />
+          <strong>Movement:</strong> {tc.movement}
+          {tc.next_bulletin && (
+            <>
+              <br />
+              <span className="muted">{tc.next_bulletin}</span>
+            </>
+          )}
+        </p>
+        {tc.track_image && (
+          <a href={tc.track_image} target="_blank" rel="noreferrer" className="tc-track">
+            <img src={tc.track_image} alt={`PAGASA track and intensity forecast of ${tc.name}`} loading="lazy" />
+            <span>Track forecast – DOST-PAGASA (opens full size)</span>
+          </a>
+        )}
+      </div>
+    );
+  }
   if (payload.type === "envi") {
     // from the layer on screen: the season ENVI or one month's
     const rows = Object.entries(layer.values).filter(([, v]) => typeof v.envi === "number");

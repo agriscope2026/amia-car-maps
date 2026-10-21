@@ -188,6 +188,25 @@ export default function MapView(props: MapViewProps) {
           "text-size": ["interpolate", ["linear"], ["zoom"], 6, 11, 9, 16], "text-letter-spacing": 0.08, "text-max-width": 8 },
         paint: { "text-color": "#202020", "text-halo-color": "rgba(255,255,255,0.95)", "text-halo-width": 2 } });
 
+      // tropical cyclone outlook: the reach of the strong winds (buffer), the forecast track and its positions
+      map.addSource("tc", { type: "geojson", data: { type: "FeatureCollection", features: [] } });
+      const tcKind = (k: string): any => ["==", ["get", "kind"], k];
+      map.addLayer({ id: "tc-buffer", type: "fill", source: "tc", filter: tcKind("buffer"), layout: { visibility: "none" },
+        paint: { "fill-color": "#ff9800", "fill-opacity": 0.16 } }, "region-halo");
+      map.addLayer({ id: "tc-buffer-line", type: "line", source: "tc", filter: tcKind("buffer"), layout: { visibility: "none" },
+        paint: { "line-color": "#e65100", "line-width": 1.6, "line-dasharray": [3, 2] } }, "region-halo");
+      map.addLayer({ id: "tc-track", type: "line", source: "tc", filter: tcKind("track"),
+        layout: { visibility: "none", "line-cap": "round", "line-join": "round" },
+        paint: { "line-color": "#b71c1c", "line-width": 3.5 } });
+      map.addLayer({ id: "tc-points", type: "circle", source: "tc", filter: ["in", ["get", "kind"], ["literal", ["now", "forecast"]]],
+        layout: { visibility: "none" },
+        paint: { "circle-radius": ["case", ["==", ["get", "kind"], "now"], 10, 6], "circle-color": "#b71c1c",
+          "circle-stroke-color": "#ffffff", "circle-stroke-width": 2 } });
+      map.addLayer({ id: "tc-labels", type: "symbol", source: "tc", filter: ["in", ["get", "kind"], ["literal", ["now", "forecast"]]],
+        layout: { visibility: "none", "text-field": ["case", ["==", ["get", "kind"], "now"], "NOW", ["get", "label"]],
+          "text-font": ["Montserrat SemiBold"], "text-size": 11, "text-offset": [0.9, 0], "text-anchor": "left", "text-max-width": 12 },
+        paint: { "text-color": "#5a1010", "text-halo-color": "rgba(255,255,255,0.95)", "text-halo-width": 1.6 } });
+
       labelPts.current = await (await fetch("/geo/labels.geojson")).json();
       setReady(true);
     });
@@ -298,6 +317,42 @@ export default function MapView(props: MapViewProps) {
     const vis = props.showHydro ? "visible" : "none";
     for (const id of ["hydro-water", "hydro-river", "hydro-river-labels", "hydro-water-labels"]) map.setLayoutProperty(id, "visibility", vis);
   }, [ready, props.showHydro]);
+
+  // ------------------------------------------------- tropical cyclone ---
+  // the track and its buffer reach far beyond CAR: zoom out to show them with CAR, and lift the pan limits meanwhile
+  const tcShown = useRef<string | null>(null);
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!ready || !map) return;
+    const fc = props.payload?.type === "tc_advisory" ? props.payload.tc?.track_geojson : undefined;
+    const on = !!fc?.features?.length;
+    for (const id of ["tc-buffer", "tc-buffer-line", "tc-track", "tc-points", "tc-labels"])
+      map.setLayoutProperty(id, "visibility", on ? "visible" : "none");
+    map.setLayoutProperty("mask", "visibility", on ? "none" : "visible");
+    const [x0, y0, x1, y1] = props.bounds;
+    if (on) {
+      (map.getSource("tc") as GeoJSONSource).setData(fc as any);
+      if (tcShown.current !== props.payload?.id) {
+        let bx0 = x0, by0 = y0, bx1 = x1, by1 = y1;
+        const walk = (c: any) => {
+          if (typeof c[0] === "number") {
+            bx0 = Math.min(bx0, c[0]); bx1 = Math.max(bx1, c[0]); by0 = Math.min(by0, c[1]); by1 = Math.max(by1, c[1]);
+          } else c.forEach(walk);
+        };
+        for (const f of fc.features) walk(f.geometry.coordinates);
+        map.setMaxBounds(null);
+        map.setMinZoom(2.5);
+        map.fitBounds([bx0, by0, bx1, by1], { padding: 40, duration: 800 });
+        tcShown.current = props.payload?.id ?? "tc";
+      }
+    } else if (tcShown.current) {
+      tcShown.current = null;
+      const pad = 3;
+      map.setMinZoom(4.5);
+      map.fitBounds([x0, y0, x1, y1], { padding: 24, duration: 600 });
+      map.once("moveend", () => map.setMaxBounds([x0 - pad * 2, y0 - pad, x1 + pad * 2, y1 + pad]));
+    }
+  }, [ready, props.payload, props.bounds]);
 
   // --------------------------------------------------------- irrigation ---
   useEffect(() => {

@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { api } from "@/lib/client";
-import { ACTIVITY_HAZARDS, ACTIVITY_STATUSES, hazardLabel, placesSummary, type Activity } from "@/lib/activities";
+import { ACTIVITY_STATUSES, placesSummary, type Activity } from "@/lib/activities";
 import { fmtNumber } from "@/lib/format";
 import { dateRange, StatusChip } from "@/components/ActivityBits";
 import AreaPicker from "./AreaPicker";
@@ -22,8 +22,9 @@ type Form = {
   remarks: string;
 };
 
+// every activity is part of the El Niño action plan (hazard "envi")
 const EMPTY: Form = {
-  area_keys: [], title: "", category: "", status: "to_conduct", hazard: "general", start_date: "",
+  area_keys: [], title: "", category: "", status: "to_conduct", hazard: "envi", start_date: "",
   end_date: "", beneficiaries: "", budget: "", office: "", remarks: "",
 };
 
@@ -71,7 +72,7 @@ function Importer({ onSaved }: { onSaved: () => void }) {
       <h2>Import from Excel</h2>
       <p className="muted small">
         One row per activity: MUNICIPALITY, ACTIVITY and STATUS (To conduct, Ongoing, Completed, Postponed), plus optional
-        PROVINCE, CATEGORY, MAP (ENVI, Drought, 10-day rainfall, Seasonal rainfall or General), START_DATE, END_DATE,
+        PROVINCE, CATEGORY, START_DATE, END_DATE,
         BENEFICIARIES, BUDGET_PHP, OFFICE and REMARKS. For several places, separate them with “;” (e.g. Bangued; Tayum), or
         write All in MUNICIPALITY for every municipality of the PROVINCE(s) given (All in both for the whole CAR). Names are
         matched like the map inputs. Validate first, then save.
@@ -125,7 +126,6 @@ function Importer({ onSaved }: { onSaved: () => void }) {
                     <th>Places</th>
                     <th>Activity</th>
                     <th>Status</th>
-                    <th>Map</th>
                     <th>Dates</th>
                   </tr>
                 </thead>
@@ -136,7 +136,6 @@ function Importer({ onSaved }: { onSaved: () => void }) {
                       <td>{(r.area_labels ?? []).join(", ")}</td>
                       <td>{r.title}</td>
                       <td><StatusChip status={r.status} /></td>
-                      <td>{hazardLabel(r.hazard)}</td>
                       <td>{dateRange(r)}</td>
                     </tr>
                   ))}
@@ -248,14 +247,6 @@ export default function ActivitiesAdmin({ geo }: { geo: Gazetteer }) {
               </select>
             </div>
             <div className="field">
-              <label htmlFor="a-map">Responds to map</label>
-              <select id="a-map" value={form.hazard} onChange={(e) => set("hazard", e.target.value)}>
-                {ACTIVITY_HAZARDS.map((h) => (
-                  <option key={h.id} value={h.id}>{h.label}</option>
-                ))}
-              </select>
-            </div>
-            <div className="field">
               <label htmlFor="a-cat">Category</label>
               <input id="a-cat" list="a-cats" maxLength={100} value={form.category} onChange={(e) => set("category", e.target.value)}
                 placeholder="e.g. Training" />
@@ -321,7 +312,7 @@ export default function ActivitiesAdmin({ geo }: { geo: Gazetteer }) {
             <option value="">All statuses</option>
             {ACTIVITY_STATUSES.map((s) => <option key={s.id} value={s.id}>{s.label}</option>)}
           </select>
-          <a href="/activities">View the public activities page →</a>
+          <a href="/activities">View the El Niño Action Plan Dashboard →</a>
         </div>
         {list === null ? (
           <p className="muted">Loading…</p>
@@ -335,7 +326,6 @@ export default function ActivitiesAdmin({ geo }: { geo: Gazetteer }) {
                   <th>Places</th>
                   <th>Activity</th>
                   <th>Status</th>
-                  <th>Map</th>
                   <th>Dates</th>
                   <th>Farmers</th>
                   <th>Budget (PHP)</th>
@@ -361,7 +351,6 @@ export default function ActivitiesAdmin({ geo }: { geo: Gazetteer }) {
                           {ACTIVITY_STATUSES.map((s) => <option key={s.id} value={s.id}>{s.label}</option>)}
                         </select>
                       </td>
-                      <td className="small">{hazardLabel(a.hazard)}</td>
                       <td className="small">{dateRange(a)}</td>
                       <td>{a.beneficiaries != null ? fmtNumber(a.beneficiaries, 0) : ""}</td>
                       <td>{a.budget != null ? fmtNumber(a.budget, 2) : ""}</td>

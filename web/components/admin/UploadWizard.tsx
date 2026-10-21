@@ -29,9 +29,12 @@ const INPUTS: Record<ProductType, { field: string; label: string; template?: str
   rainfall_dekad: [{ field: "file", label: "10-day rainfall per municipality (mm)", template: "rainfall_dekad" }],
   rainfall_seasonal: [{ field: "file", label: "Monthly rainfall per municipality (mm)", template: "rainfall_seasonal" }],
   drought: [{ field: "file", label: "Drought categories per province and month", template: "drought" }],
+  tc_advisory: [], // made from the PAGASA tropical cyclone bulletin (admin home: fetch button)
 };
 
 const STEPS = ["Period", "Upload", "Validation", "Preview", "Save draft"];
+// tropical cyclone outlook: no upload – fetch the PAGASA bulletin, check it, save
+const TC_STEPS = ["PAGASA bulletin", "Check", "Preview", "Save draft"];
 
 const DATASET_LABELS: Record<string, string> = {
   drought: "Drought forecast", damage: "Historical damage", crops: "Standing rice and corn",
@@ -247,7 +250,7 @@ export default function UploadWizard({ type, geo }: { type: ProductType; geo: Ga
 
   // a feed fetch from the admin home arrives through sessionStorage
   useEffect(() => {
-    if (!["rainfall_dekad", "rainfall_seasonal"].includes(type) || !window.location.search.includes("from=feed")) return;
+    if (!["rainfall_dekad", "rainfall_seasonal", "tc_advisory"].includes(type) || !window.location.search.includes("from=feed")) return;
     const raw = sessionStorage.getItem("feedPreview");
     if (!raw) return;
     sessionStorage.removeItem("feedPreview");
@@ -339,13 +342,14 @@ export default function UploadWizard({ type, geo }: { type: ProductType; geo: Ga
     <main className="page">
       <h1>New: {meta.label}</h1>
       <ol className="steps">
-        {STEPS.map((s, i) => (
-          <li key={s} className={i === step ? "on" : i < step ? "done" : ""}>
+        {(type === "tc_advisory" ? TC_STEPS : STEPS).map((s, i) => (
+          <li key={s} className={i === (type === "tc_advisory" ? Math.max(0, step - 1) : step) ? "on" : i < (type === "tc_advisory" ? Math.max(0, step - 1) : step) ? "done" : ""}>
             {i + 1}. {s}
           </li>
         ))}
       </ol>
 
+      {type !== "tc_advisory" && (
       <section>
         <h2>1. Period and source</h2>
         <div className="form-grid">
@@ -420,14 +424,27 @@ export default function UploadWizard({ type, geo }: { type: ProductType; geo: Ga
           </div>
         )}
       </section>
+      )}
 
       <section>
-        <h2>2. Upload</h2>
+        <h2>{type === "tc_advisory" ? "1. Get the PAGASA bulletin" : "2. Upload"}</h2>
         {fromFeed && (
           <p className="msg ok">
-            Loaded from {type === "rainfall_seasonal" ? "PAGASA's seasonal forecast page" : "the 10-day rainfall feed"}. You can
-            still upload a file instead.
+            Loaded from {type === "tc_advisory" ? "the latest PAGASA Tropical Cyclone Bulletin" : type === "rainfall_seasonal"
+              ? "PAGASA's seasonal forecast page" : "the 10-day rainfall feed"}.
+            {type === "tc_advisory" ? " Check the wind signals against PAGASA's bulletin before publishing." : " You can still upload a file instead."}
           </p>
+        )}
+        {type === "tc_advisory" && (
+          <div className="source-choice">
+            <p className="muted small" style={{ marginTop: 0 }}>
+              Made from the latest PAGASA Tropical Cyclone Bulletin: the CAR municipalities under each wind signal, the storm's
+              position, movement and strength, PAGASA's track forecast image, and a farm advisory for CAR.
+            </p>
+            <button className="btn" disabled={busy} onClick={fetchAuto}>
+              {busy ? "Fetching the PAGASA bulletin…" : fromFeed ? "Fetch again (newer bulletin)" : "Fetch the latest PAGASA tropical cyclone bulletin"}
+            </button>
+          </div>
         )}
         {(type === "rainfall_seasonal" || type === "rainfall_dekad") && (
           <div className="source-choice">
@@ -543,9 +560,11 @@ export default function UploadWizard({ type, geo }: { type: ProductType; geo: Ga
             files.
           </p>
         )}
-        <button className="btn" disabled={busy || !Object.keys(files).length} onClick={() => validate()}>
-          {busy ? "Checking…" : "Validate"}
-        </button>
+        {type !== "tc_advisory" && (
+          <button className="btn" disabled={busy || !Object.keys(files).length} onClick={() => validate()}>
+            {busy ? "Checking…" : "Validate"}
+          </button>
+        )}
         {error && <p className="msg err" role="alert">{error}</p>}
       </section>
 

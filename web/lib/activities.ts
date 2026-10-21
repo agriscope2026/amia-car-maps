@@ -19,6 +19,7 @@ export const ACTIVITY_HAZARDS = [
   { id: "drought", label: "Drought forecast" },
   { id: "rainfall_dekad", label: "10-day rainfall" },
   { id: "rainfall_seasonal", label: "Seasonal rainfall" },
+  { id: "tc_advisory", label: "Tropical cyclone (typhoon)" },
 ] as const;
 export type ActivityHazard = (typeof ACTIVITY_HAZARDS)[number]["id"];
 
@@ -109,6 +110,7 @@ export function firstIssue(e: z.ZodError): string {
  * drought Dry spell / Drought) and the upper half of a graduated one (heavy rainfall and above). */
 export function defaultVulnerableClasses(layer: Pick<Layer, "legend">): string[] {
   const cls = layer.legend.classes.map((c) => c.label);
+  if (layer.legend.id === "tcws") return cls.slice(1); // tropical cyclone: every wind signal
   const from = layer.legend.kind === "categorical" ? Math.max(0, cls.length - 2) : Math.ceil(cls.length / 2);
   return cls.slice(from);
 }

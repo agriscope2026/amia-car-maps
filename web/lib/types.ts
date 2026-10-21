@@ -1,4 +1,4 @@
-export type ProductType = "envi" | "rainfall_dekad" | "rainfall_seasonal" | "drought";
+export type ProductType = "envi" | "rainfall_dekad" | "rainfall_seasonal" | "drought" | "tc_advisory";
 export type Status = "draft" | "published" | "archived";
 
 export const PRODUCT_TYPES: { id: ProductType; label: string; short: string }[] = [
@@ -6,6 +6,7 @@ export const PRODUCT_TYPES: { id: ProductType; label: string; short: string }[] 
   { id: "rainfall_dekad", label: "10-day rainfall forecast", short: "10-day rainfall" },
   { id: "rainfall_seasonal", label: "Seasonal rainfall forecast", short: "Seasonal rainfall" },
   { id: "drought", label: "Drought forecast", short: "Drought forecast" },
+  { id: "tc_advisory", label: "Special Farm Weather Outlook (tropical cyclone)", short: "Tropical cyclone" },
 ];
 
 export interface LegendClass {
@@ -45,7 +46,7 @@ export interface Layer {
 }
 
 export interface Period {
-  kind: "dekad" | "month" | "season";
+  kind: "dekad" | "month" | "season" | "event"; // event: a tropical cyclone bulletin
   start: string;
   end: string;
   label: string;
@@ -106,6 +107,38 @@ export interface Payload {
   recommendations_draft?: string;
   crop_advice_draft?: Record<string, string>;
   exposure?: Exposure; // ENVI: what the crops indicator was made of
+  tc?: TropicalCyclone; // farm weather outlook: the PAGASA tropical cyclone bulletin it was made from
+}
+
+/** What the Special Farm Weather Outlook keeps of a PAGASA Tropical Cyclone Bulletin. */
+export interface TropicalCyclone {
+  bulletin_no: number | null;
+  category: string | null; // "Super Typhoon"
+  name: string | null; // "ROSAL"
+  issued_text: string;
+  issued_at: string | null;
+  next_bulletin: string;
+  headline: string;
+  location_text: string;
+  lat: number | null;
+  lon: number | null;
+  movement: string;
+  strength: string;
+  max_wind_kmh: number | null;
+  gust_kmh: number | null;
+  forecast: { time: string; where: string }[];
+  gusts: { day: string; date: string; areas: string }[];
+  rainfall: string[];
+  highest_possible: string;
+  outlook: string[];
+  track_image: string | null;
+  bulletin_pdf: string | null;
+  page_url: string;
+  // from the bulletin PDF: forecast positions with coordinates, and how far the strong winds reach
+  track?: { hours: number; time: string; lat: number; lon: number; where: string; wind_kmh: number; category: string; cat: string; outside_par: boolean }[];
+  wind_extent_km?: number | null;
+  pressure_hpa?: number | null;
+  track_geojson?: { type: "FeatureCollection"; features: { type: "Feature"; geometry: any; properties: Record<string, any> }[] };
 }
 
 /** ENVI exposure inputs besides rice and corn: HVC (HVCDP Regional Summary) and livestock. */

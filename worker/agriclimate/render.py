@@ -60,6 +60,8 @@ STYLES = {
     "envi": {"title": "EL NIÑO\nVULNERABILITY\nINDEX", "box_sub": "ENVI classes (0–1)",
              "muni_edge": "#8a8a8a", "muni_lw": 0.35, "prov_edge": "#000000", "prov_lw": 1.6},
 }
+STYLES["tc_advisory"] = {"title": "SPECIAL FARM\nWEATHER\nOUTLOOK", "box_sub": "Tropical Cyclone Wind Signals",
+                          "muni_edge": "#8a8a8a", "muni_lw": 0.35, "prov_edge": "#000000", "prov_lw": 1.8}
 DEFAULT_STYLE = STYLES["drought"]
 
 

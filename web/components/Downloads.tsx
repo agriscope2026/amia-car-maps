@@ -2,7 +2,7 @@ import type { Download } from "@/lib/types";
 
 const SHORT: Record<string, string> = {
   png: "PNG", pdf: "PDF", presentation: "Presentation PNG", presentation_pdf: "Presentation PDF",
-  poster: "A4 poster PNG", poster_pdf: "A4 poster PDF", zip: "ZIP",
+  poster: "A4 PNG", poster_pdf: "A4 PDF", social: "Facebook post PNG (4:5)", zip: "ZIP",
 };
 
 /** Map images and PDFs: one row per map (the map on screen highlighted), then a ZIP with all of them. */

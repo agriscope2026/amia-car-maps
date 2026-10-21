@@ -15,6 +15,7 @@ Endpoints
   GET  /droughtcaster/status
   POST /feeds/rainfall_dekad/fetch  10-day rainfall from the Cordillera weather API → draft payload
   POST /feeds/rainfall_seasonal/fetch  seasonal rainfall read from PAGASA's seasonal forecast page → draft
+  POST /feeds/tc_advisory/fetch   farm weather outlook from the latest PAGASA tropical cyclone bulletin → draft
   GET  /feeds/rainfall_dekad/status
 Run:  uvicorn agriclimate.api:app --port 8001
 """
@@ -33,7 +34,7 @@ from pathlib import Path
 from fastapi import Depends, FastAPI, File, Form, Header, HTTPException, UploadFile
 from fastapi.responses import FileResponse, Response
 
-from . import activities, droughtcaster, exports, pagasa_seasonal, rainfall_feed, reference, storage, templates
+from . import activities, droughtcaster, exports, pagasa_tc, pagasa_seasonal, rainfall_feed, reference, storage, templates
 from .envi import config
 from .products import (crop_advice, drought, envi_product, rainfall_dekad, rainfall_seasonal, recommend,
                        reference_layers)
@@ -44,7 +45,7 @@ OUTPUT_DIR = config.OUTPUTS
 JOBS_DIR = OUTPUT_DIR / "jobs"
 MAX_UPLOAD = 20 * 1024 * 1024
 
-PRODUCT_TYPES = {"envi", "rainfall_dekad", "rainfall_seasonal", "drought"}
+PRODUCT_TYPES = {"envi", "rainfall_dekad", "rainfall_seasonal", "drought", "tc_advisory"}
 BUILDERS = {"rainfall_dekad": rainfall_dekad.build, "rainfall_seasonal": rainfall_seasonal.build,
             "drought": drought.build}
 
@@ -88,6 +89,10 @@ def _settings(raw: str | None) -> dict:
 
 def build_payload(ptype: str, files: dict, settings: dict) -> dict:
     """Validate inputs and build the payload; fill the recommendation draft and text overrides."""
+    if ptype == "tc_advisory":
+        return {"type": ptype, "ok": False, "report": {"errors": [
+            "The farm weather outlook is made from the latest PAGASA tropical cyclone bulletin – use "
+            "“Fetch the latest PAGASA tropical cyclone bulletin” on the admin home page."], "warnings": []}}
     if ptype == "envi":
         missing = [k for k in ("drought", "damage", "crops") if k not in files]
         if missing:
@@ -309,6 +314,12 @@ def pagasa_seasonal_fetch(settings: dict | None = None):
     res = pagasa_seasonal.run_once(settings or {})
     _with_drafts(res.get("payload"))
     return res
+
+
+@app.post("/feeds/tc_advisory/fetch", dependencies=[Depends(auth)])
+def pagasa_tc_fetch(settings: dict | None = None):
+    """Special Farm Weather Outlook and Advisory from the latest PAGASA tropical cyclone bulletin → draft payload."""
+    return pagasa_tc.run_once(settings or {})
 
 
 @app.get("/feeds/rainfall_dekad/status", dependencies=[Depends(auth)])

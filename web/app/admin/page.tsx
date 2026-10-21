@@ -24,11 +24,14 @@ export default async function AdminHome() {
         <h1>Map products</h1>
         <section>
           <h2>Create a product</h2>
-          <p className="muted">Upload → validate → preview → edit text → generate exports → publish.</p>
+          <p className="muted">
+            Upload → validate → preview → edit text → generate exports → publish. The Special Farm Weather Outlook is made from
+            the latest PAGASA tropical cyclone bulletin instead of an upload.
+          </p>
           <div className="row">
             {PRODUCT_TYPES.map((t) => (
               <Link key={t.id} className="btn secondary" href={`/admin/new/${t.id}`}>
-                + {t.label}
+                + {t.id === "tc_advisory" ? "Special Farm Weather Outlook and Advisory (tropical cyclone)" : t.label}
               </Link>
             ))}
           </div>
@@ -44,6 +47,13 @@ export default async function AdminHome() {
             page. The values are read from PAGASA&apos;s table images, so check them against the image before publishing.
           </p>
           <FeedButton type="rainfall_seasonal" label="Fetch latest seasonal forecast from PAGASA" />
+          <h3>Special Farm Weather Outlook and Advisory (tropical cyclone)</h3>
+          <p className="muted small">
+            Reads the latest PAGASA Tropical Cyclone Bulletin: which CAR municipalities are under a wind signal, the storm&apos;s
+            position, movement and strength, and PAGASA&apos;s track forecast image. Makes a draft with a farm advisory, exported as
+            A4 pages and Facebook posts. Check the signals against PAGASA&apos;s bulletin before publishing.
+          </p>
+          <FeedButton type="tc_advisory" label="Fetch the latest PAGASA tropical cyclone bulletin" />
         </section>
 
         <section>

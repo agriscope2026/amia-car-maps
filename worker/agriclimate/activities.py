@@ -29,6 +29,8 @@ HAZARDS = {
     "rainfall_dekad": ["10 DAY", "10 DAY RAINFALL", "10 DAY RAINFALL FORECAST", "DEKAD", "DEKADAL", "RAINFALL 10 DAY"],
     "rainfall_seasonal": ["SEASONAL", "SEASONAL RAINFALL", "SEASONAL RAINFALL FORECAST", "LA NINA", "RAINFALL",
                           "HEAVY RAINFALL", "FLOOD"],
+    "tc_advisory": ["TYPHOON", "SUPER TYPHOON", "TROPICAL CYCLONE", "TC", "STORM", "TROPICAL STORM", "BAGYO",
+                    "WIND SIGNAL", "TCWS", "FARM WEATHER OUTLOOK"],
 }
 COLUMNS = {   # field → accepted headers (normalized: upper case, single spaces, "_" as space)
     "title": ["ACTIVITY", "ACTIVITIES", "ACTIVITY NAME", "TITLE", "INTERVENTION", "INTERVENTIONS", "PROJECT",

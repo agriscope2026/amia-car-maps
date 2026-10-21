@@ -5,10 +5,12 @@ import { signPayload, worker } from "@/lib/server/worker";
 
 export const maxDuration = 300;
 
-/** Automatic sources: 10-day rainfall feed, and PAGASA's seasonal forecast (read from its published tables). */
+/** Automatic sources: 10-day rainfall feed, PAGASA's seasonal forecast (read from its published tables) and the PAGASA
+ * Tropical Cyclone Bulletin (Special Farm Weather Outlook and Advisory). */
 const SOURCES: Record<string, string> = {
   rainfall_dekad: "/feeds/rainfall_dekad/fetch",
   rainfall_seasonal: "/feeds/rainfall_seasonal/fetch",
+  tc_advisory: "/feeds/tc_advisory/fetch",
 };
 
 /** Fetch the latest forecast from an automatic source and return it as a signed preview (a draft-to-be). */

@@ -4,7 +4,7 @@ import ActivitiesDashboard from "@/components/ActivitiesDashboard";
 import type { Gazetteer } from "@/lib/types";
 
 export const revalidate = 3600;
-export const metadata = { title: "Activities – AMIA CAR MAPS" };
+export const metadata = { title: "El Niño Action Plan Dashboard – AMIA CAR MAPS" };
 
 export default async function ActivitiesPage() {
   const geo = JSON.parse(await fs.readFile(path.join(process.cwd(), "public", "geo", "car.json"), "utf-8")) as Gazetteer;

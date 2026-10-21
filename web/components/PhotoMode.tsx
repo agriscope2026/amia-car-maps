@@ -21,7 +21,9 @@ const href = (d?: Download) => d?.url ?? d?.path;
 export type PhotoView = "landscape" | "portrait";
 
 /** Rainfall / drought report pages around the maps (not map layers): title first, summary and recommendations last. */
-const PAGE_RE = /^(cover|summary|recommendations)(?:_(\d+))?$/;
+const PAGE_RE = /^(a4|cover|advisory|summary|recommendations)(?:_(\d+))?$/;
+// a4: the one-page A4 of the tropical cyclone outlook; advisory: its main Facebook post
+const PAGE_RANK = { a4: 0, cover: 1, advisory: 2, summary: 3, recommendations: 4 } as const;
 const isPage = (id: string) => PAGE_RE.test(id);
 
 /** Report pages of a product (title first, then summary and recommendations pages in order), from its downloads:
@@ -30,10 +32,11 @@ function pageIds(dl: Download[]): { first: string[]; last: string[] } {
   const ids = [...new Set(dl.map((d) => d.layer ?? "").filter(isPage))];
   const rank = (id: string) => {
     const m = id.match(PAGE_RE)!;
-    return { cover: 0, summary: 1, recommendations: 2 }[m[1] as "cover"] * 1000 + Number(m[2] ?? 1);
+    return PAGE_RANK[m[1] as keyof typeof PAGE_RANK] * 1000 + Number(m[2] ?? 1);
   };
   ids.sort((a, b) => rank(a) - rank(b));
-  return { first: ids.filter((i) => i.startsWith("cover")), last: ids.filter((i) => !i.startsWith("cover")) };
+  // before the maps: A4 page, title, advisory; after them: summary and recommendations
+  return { first: ids.filter((i) => rank(i) < 3000), last: ids.filter((i) => rank(i) >= 3000) };
 }
 
 /**
@@ -46,12 +49,15 @@ export function photosOf(payload: Payload | null, view: PhotoView = "landscape")
   const dl = payload?.downloads ?? [];
   if (!payload || !dl.length) return [];
   const pick = (files: Download[], ...kinds: string[]) => kinds.map((k) => files.find((d) => d.kind === k)).find(Boolean);
-  if (payload.type === "envi") {
+  if (payload.type === "envi" || payload.type === "tc_advisory") {
     const out: Photo[] = [];
-    // title page, season outlook, each month, summary, recommendations – in the chosen format
-    const maps = payload.layers.filter((x) => x.id === "envi" || x.id.startsWith("m_"));
+    const tc = payload.type === "tc_advisory";
+    // ENVI: title page, season outlook, each month, summary, recommendations; tropical cyclone: title page, advisory,
+    // map, summary, recommendations – in the chosen format (ENVI: presentation / A4; tropical cyclone: Facebook / A4)
+    const maps = tc ? payload.layers : payload.layers.filter((x) => x.id === "envi" || x.id.startsWith("m_"));
     const labels = new Map(maps.map((l) => [l.id, l.id === "envi" ? `Season outlook (${payload.period.label})` : l.label]));
-    const [web, full, pdf] = view === "portrait" ? ["poster_web", "poster", "poster_pdf"] : ["presentation_web", "presentation", "presentation_pdf"];
+    const [web, full, pdf] = view === "portrait" ? ["poster_web", "poster", "poster_pdf"]
+      : tc ? ["social_web", "social", "social"] : ["presentation_web", "presentation", "presentation_pdf"];
     const pg = pageIds(dl);
     for (const id of [...pg.first, ...maps.map((l) => l.id), ...pg.last]) {
       const files = dl.filter((d) => d.layer === id);
@@ -94,7 +100,8 @@ export default function PhotoMode({ payload, layerId, onLayer, onClose }: {
   const [view, setView] = useState<PhotoView>(() =>
     typeof window !== "undefined" && window.matchMedia("(max-width: 820px)").matches ? "portrait" : "landscape",
   );
-  const hasPosters = payload.type === "envi" && (payload.downloads ?? []).some((d) => d.kind === "poster_web" || d.kind === "poster");
+  const tc = payload.type === "tc_advisory";
+  const hasPosters = (payload.type === "envi" || tc) && (payload.downloads ?? []).some((d) => d.kind === "poster_web" || d.kind === "poster");
   const photos = useMemo(() => photosOf(payload, view), [payload, view]);
   // the photo on screen: a map follows the dashboard's layer; a page (title, summary, recommendations) is kept here
   const [page, setPage] = useState<string | null>(null);
@@ -169,8 +176,8 @@ export default function PhotoMode({ payload, layerId, onLayer, onClose }: {
           <div className="photo-view" role="radiogroup" aria-label="Image format">
             {(["landscape", "portrait"] as const).map((v) => (
               <button key={v} role="radio" aria-checked={view === v} className={`photo-btn ${view === v ? "on" : ""}`} onClick={() => setView(v)}
-                title={v === "landscape" ? "Presentation (landscape)" : "A4 poster (portrait)"}>
-                {v === "landscape" ? "▭" : "▯"}<span className="photo-btn-label"> {v === "landscape" ? "Presentation" : "A4"}</span>
+                title={v === "landscape" ? (tc ? "Facebook post (4:5)" : "Presentation (landscape)") : "A4 poster (portrait)"}>
+                {v === "landscape" ? (tc ? "f" : "▭") : "▯"}<span className="photo-btn-label"> {v === "landscape" ? (tc ? "Facebook" : "Presentation") : "A4"}</span>
               </button>
             ))}
           </div>

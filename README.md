@@ -15,9 +15,12 @@ Administrative Region (DA-RFO-CAR), AMIA Program. It has two parts:
     (seasonal rainfall, drought and ENVI), with a circle legend.
   - Print maps follow the DA-RFO-CAR sample layouts in `sample data/`. The 10-day forecast has one map per
     day; seasonal rainfall one map per month (there are no 10-day or season total maps).
-- **Activities page:** the activities of DA and its partners in each municipality (to conduct, ongoing,
-  completed, postponed) next to the areas at risk on the latest ENVI, drought or rainfall map, with large figures
-  and charts. Staff enter activities by hand or import them from Excel.
+- **El Niño Action Plan Dashboard:** the El Niño activities of DA and its partners in each municipality (to
+  conduct, ongoing, completed, postponed) next to the municipalities at risk on the latest ENVI map, with large
+  figures and charts. Staff enter activities by hand or import them from Excel.
+- **Special Farm Weather Outlook and Advisory (tropical cyclone):** made from the latest PAGASA Tropical Cyclone
+  Bulletin, with the CAR municipalities under each wind signal on a map, PAGASA's track forecast image and a farm
+  advisory, exported as A4 pages and Facebook posts.
 - **Photo mode** on the dashboard shows the finished map images with the recommendations (the infographic for
   ENVI).
 
@@ -42,6 +45,8 @@ worker/     Python FastAPI render worker – validation, products, exports (depl
   agriclimate/pagasa_seasonal.py seasonal rainfall from PAGASA's published tables (CAR rows, OCR)
   agriclimate/droughtcaster.py   CAR drought outlook from PAGASA DroughtCaster (+ manual upload fallback)
   data/gis, data/gis_template    CAR boundaries (EPSG:4326) and the DA QGIS print templates
+                                 (+ ne_countries_region.geojson: Natural Earth 1:50m countries, public domain,
+                                 for the tropical cyclone track map)
   scripts/              build_reference, build_glyphs, build_seed_sql, build_demo, make_demo_samples
 supabase/   migrations/0001_init.sql (PostGIS schema + RLS + storage buckets), seed.sql
 sample data/sample input/        DA-RFO-CAR sample inputs (ENVI, incl. HVCDP Regional Summary and livestock inventory)
@@ -75,7 +80,7 @@ creates or updates this admin in the local database on every start and prints it
 
 - Add more users with `npm run db:user -- someone@da.gov.ph <password> editor` (or `admin`).
 - **Sample activities (development only):** `db:reset` and `node dev.mjs` (when the list is empty) add about 80
-  made-up activities, tagged `sample (dev)`, so the Activities page has something to show. Remove them with
+  made-up activities, tagged `sample (dev)`, so the El Niño Action Plan Dashboard has something to show. Remove them with
   `node scripts/localdb.mjs activities-demo --clear`, or make a fresh set with `node scripts/localdb.mjs activities-demo`.
   They are never in the migrations or `seed.sql`, so production never gets them.
 - Open psql with the command printed by `node scripts/localdb.mjs psql`.

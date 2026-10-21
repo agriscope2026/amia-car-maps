@@ -133,7 +133,8 @@ def export_product(payload: dict, out_dir: Path, settings: dict | None = None, f
     layers = [lyr for lyr in payload["layers"] if lyr["id"] not in NO_EXPORT_LAYERS]
     n = len(layers)
     envi_images = stem == "envi" and bool(files)   # ENVI: presentation + A4 poster instead of the square print map
-    for i, lyr in enumerate([] if envi_images else layers):
+    tc = stem == "tc_advisory"                      # tropical cyclone: one A4 page (PDF) + the Facebook posts
+    for i, lyr in enumerate([] if envi_images or tc else layers):
         progress("map", "running", f"Rendering map {i + 1}/{n}: {lyr['label']}")
         name = f"{stem}_map_{lyr['id']}"
         r = render.render_layer(payload, lyr, out_dir, name, preview=out_dir / f"{name}_preview.jpg")
@@ -142,7 +143,12 @@ def export_product(payload: dict, out_dir: Path, settings: dict | None = None, f
                                  "jpg": r["preview"].name})
     progress("map", "done", "Maps ready")
 
-    if not envi_images and manifest["maps"]:
+    if tc:
+        from . import tc_pages
+        manifest["maps"] = tc_pages.export(payload, out_dir, progress)
+        progress("pages", "done", "A4 page and Facebook posts ready")
+
+    if not envi_images and not tc and manifest["maps"]:
         # rainfall / drought: a title page first, a summary page and a recommendations page last
         from . import pages
         progress("pages", "running", "Making the title, summary and recommendations pages")
@@ -174,7 +180,7 @@ def export_product(payload: dict, out_dir: Path, settings: dict | None = None, f
     zpath = out_dir / f"{stem}_{payload['period']['start']}_maps.zip"
     with zipfile.ZipFile(zpath, "w", zipfile.ZIP_STORED) as z:
         for m in manifest["maps"]:
-            for k in ("png", "pdf", "presentation", "poster"):
+            for k in ("png", "pdf", "presentation", "poster", "social"):
                 if m.get(k):
                     z.write(out_dir / m[k], f"CAR_{stem}_{layer_tag(m['layer'])}_{k}{Path(m[k]).suffix}")
         if xlsx:
