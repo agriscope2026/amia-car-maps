@@ -62,6 +62,8 @@ export const addActivities = (rows: ActivityInput[], actor: Actor | string, sour
   repo().addActivities(rows, actorOf(actor), source, replace);
 export const updateActivity = (id: string, row: ActivityInput) => repo().updateActivity(id, row);
 export const deleteActivity = (id: string) => repo().deleteActivity(id);
+export const getSetting = (key: string) => repo().getSetting(key);
+export const setSetting = (key: string, value: any) => repo().setSetting(key, value);
 
 /** Export files of local/postgres mode live here (Supabase mode uses Storage). */
 export const LOCAL_EXPORTS_DIR = path.join(process.cwd(), ".data", "exports");

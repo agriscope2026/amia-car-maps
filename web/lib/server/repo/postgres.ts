@@ -237,4 +237,14 @@ export const postgresRepo: Repo = {
     const r = await pool().query(`delete from activities where id = $1`, [id]);
     if (!r.rowCount) throw new Error("Activity not found");
   },
+
+  async getSetting(key) {
+    const rows = await q<{ value: any }>(`select value from app_settings where key = $1`, [key]);
+    return rows[0]?.value ?? null;
+  },
+
+  async setSetting(key, value) {
+    await q(`insert into app_settings (key, value, updated_at) values ($1, $2::jsonb, now())
+             on conflict (key) do update set value = excluded.value, updated_at = now()`, [key, JSON.stringify(value)]);
+  },
 };

@@ -269,6 +269,19 @@ On the dashboard the map zooms out to show the track, the strong-wind area and C
 from the edges, so nothing is cut off when posted or printed. PAGASA issues a bulletin every 6 hours, so fetch
 again and publish a new version as the storm moves.
 
+### Automatic updating
+
+Under **Automatic updating** (admin home, below the fetch button) an admin can choose:
+
+- **Off** – an admin fetches, checks and publishes each bulletin (the default);
+- **Automatic** – 3 minutes after each PAGASA bulletin (5 AM, 11 AM, 5 PM and 11 PM, Philippine time) the app
+  fetches the new bulletin, makes the A4 and Facebook exports, **publishes it without review** and deletes the older
+  advisories (published and archived ones, and drafts it made itself; drafts made by hand are kept). If PAGASA is
+  late, it tries again at :15 and :30. If a run is cut short (e.g. the exports take long), the next run continues
+  with the same bulletin. When PAGASA has no active tropical cyclone, nothing changes.
+
+The box shows when it last ran and what happened. **Run now** does one run immediately (also while it is off).
+
 ## The 10-day rainfall feed
 
 The 10-day rainfall forecast is fetched automatically every morning from the Cordillera weather service. It gives

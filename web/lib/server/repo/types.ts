@@ -70,6 +70,9 @@ export interface Repo {
   addActivities(rows: ActivityInput[], actor: Actor, source: string, replace?: boolean): Promise<number>;
   updateActivity(id: string, row: ActivityInput): Promise<void>;
   deleteActivity(id: string): Promise<void>;
+  /** App-wide settings (key → JSON), e.g. "tc_auto". */
+  getSetting(key: string): Promise<any | null>;
+  setSetting(key: string, value: any): Promise<void>;
 }
 
 export function slugFor(type: ProductType, periodStart: string) {

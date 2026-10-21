@@ -889,3 +889,11 @@ select { width: 100%; padding: 8px 10px; border: 1px solid var(--line); border-r
 .tc-track { display: block; margin-top: 8px; text-decoration: none; }
 .tc-track img { width: 100%; height: auto; border-radius: 8px; border: 1px solid var(--line); display: block; }
 .tc-track span { font-size: 11.5px; color: var(--muted); }
+
+/* admin: automatic Special Advisory switch */
+.tc-auto { display: grid; gap: 8px; max-width: 760px; }
+.tc-auto-options { display: grid; gap: 6px; }
+.tc-auto-options label { display: flex; gap: 10px; align-items: flex-start; padding: 10px 12px; border: 1px solid #dee5e1; border-radius: var(--radius); cursor: pointer; font-size: 14px; }
+.tc-auto-options label.on { border-color: var(--green); background: var(--green-soft); }
+.tc-auto-options input { margin-top: 3px; accent-color: var(--green); }
+.tc-auto .btn { justify-self: start; }

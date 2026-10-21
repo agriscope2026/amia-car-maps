@@ -5,14 +5,15 @@ import { listPublished, listVersions } from "@/lib/server/repo";
 import { PRODUCT_TYPES } from "@/lib/types";
 import { fmtDate } from "@/lib/format";
 import { AdminBar } from "./AdminBar";
-import { DeleteVersionButton, FeedButton, UnpublishButton } from "./actions";
+import { DeleteVersionButton, FeedButton, TcAutoSwitch, UnpublishButton } from "./actions";
+import { getTcAuto } from "@/lib/server/tcAuto";
 
 export const dynamic = "force-dynamic";
 
 export default async function AdminHome() {
   const user = await currentUser();
   if (!user) redirect("/admin/login");
-  const [versions, published] = await Promise.all([listVersions(), listPublished()]);
+  const [versions, published, tcAuto] = await Promise.all([listVersions(), listPublished(), getTcAuto()]);
   const own = new Set(versions.map((v) => v.id));
   const demo = published.filter((p) => !own.has(p.id));
   const typeLabel = (t: string) => PRODUCT_TYPES.find((x) => x.id === t)?.label ?? t;
@@ -54,6 +55,8 @@ export default async function AdminHome() {
             A4 pages and Facebook posts. Check the signals against PAGASA&apos;s bulletin before publishing.
           </p>
           <FeedButton type="tc_advisory" label="Fetch the latest PAGASA tropical cyclone bulletin" />
+          <h4>Automatic updating</h4>
+          <TcAutoSwitch initial={tcAuto} canEdit={user.role === "admin"} />
         </section>
 
         <section>

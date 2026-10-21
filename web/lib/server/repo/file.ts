@@ -19,6 +19,7 @@ interface LocalDb {
   irrigation: any | null;
   unpublishedDemo: string[];
   activities?: Activity[];
+  settings?: Record<string, any>;
 }
 
 async function readJson<T>(file: string, fallback: T): Promise<T> {
@@ -232,6 +233,16 @@ export const fileRepo: Repo = {
       const n = db.activities?.length ?? 0;
       db.activities = (db.activities ?? []).filter((x) => x.id !== id);
       if (db.activities.length === n) throw new Error("Activity not found");
+    });
+  },
+
+  async getSetting(key) {
+    return (await loadDb()).settings?.[key] ?? null;
+  },
+
+  async setSetting(key, value) {
+    await saveDb((db) => {
+      db.settings = { ...(db.settings ?? {}), [key]: value };
     });
   },
 };

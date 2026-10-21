@@ -256,4 +256,16 @@ export const supabaseRepo: Repo = {
     if (error) throw error;
     if (!data?.length) throw new Error("Activity not found");
   },
+
+  async getSetting(key) {
+    const { data, error } = await supabaseAdmin().from("app_settings").select("value").eq("key", key).maybeSingle();
+    if (error) throw error;
+    return data?.value ?? null;
+  },
+
+  async setSetting(key, value) {
+    const { error } = await supabaseAdmin().from("app_settings")
+      .upsert({ key, value, updated_at: new Date().toISOString() }, { onConflict: "key" });
+    if (error) throw error;
+  },
 };
