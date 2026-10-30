@@ -3,8 +3,8 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   ACTIVITY_STATUSES, beneficiariesText, BENEFICIARY_TYPES, coverage, defaultVulnerableClasses, emptyCounts, inAny,
-  placesSummary, statusLabel, worstClasses,
-  type Activity, type ActivityStatus, type StatusCounts,
+  hasSsl, placesSummary, provinceOf, SSL_BREAKS, SSL_CLASS_LABELS, SSL_COLORS, SSL_CROPS, statusLabel, worstClasses,
+  type Activity, type ActivityStatus, type SslCropId, type SslData, type SslRow, type StatusCounts,
 } from "@/lib/activities";
 import { fmtDate, fmtNumber, sortIssues, withoutTotals } from "@/lib/format";
 import { type CatalogEntry, type Gazetteer, type Layer, type Payload, type ProductType } from "@/lib/types";
@@ -263,14 +263,17 @@ function ActivityItem({ a, here, geo }: { a: Activity; here?: string; geo: Gazet
 
 // ------------------------------------------------------------ coverage map ---
 
-/** What the map is coloured by: coverage (at risk with / without an activity) or a total per municipality. */
-type Measure = "coverage" | "units" | "beneficiaries" | "budget";
+/** What the map is coloured by: coverage (at risk with / without an activity), a total per municipality, or the
+ * self-sufficiency loss of rice / corn per province (SSL, from the activities workbook). */
+type Measure = "coverage" | "units" | "beneficiaries" | "budget" | "ssl";
 const MEASURES: { id: Measure; label: string }[] = [
   { id: "coverage", label: "Activity coverage" },
   { id: "units", label: "Units delivered" },
   { id: "beneficiaries", label: "Beneficiaries" },
   { id: "budget", label: "Budget" },
+  { id: "ssl", label: "Self-sufficiency (SSL)" },
 ];
+const pctText = (n: number | null | undefined, d = 1) => (n == null ? "–" : `${fmtNumber(n, d)}%`);
 const SHADES = ["#d7eedb", "#a6d8ae", "#6cbf7a", "#2e9447", "#0b6237"];
 const NONE = "#f1f3f2";
 
@@ -280,6 +283,11 @@ export interface Shade {
   breaks: number[]; // upper bound of each class
   fmt: (n: number) => string;
   whole: boolean; // whole numbers: classes read "1–3", "4–7"
+  colors?: string[]; // own palette (one per class) instead of the green one
+  noneLabel?: string; // legend text for areas without a value (default "None")
+  noGaps?: boolean; // do not outline the at-risk places without an activity (the map is about something else)
+  classNames?: string[]; // own legend text per class
+  tip?: (areaKey: string) => string | null; // hover text instead of "label: value"
 }
 
 /** Up to five classes from the quantiles of the values above 0, rounded to readable numbers. */
@@ -298,10 +306,11 @@ function makeBreaks(values: number[], whole: boolean): number[] {
   }
   return out;
 }
-const shadeOf = (sh: Shade, v: number) => {
-  if (!(v > 0)) return NONE;
+const shadeOf = (sh: Shade, v: number | undefined) => {
+  if (v === undefined || (!sh.colors && !(v > 0))) return NONE;
   const i = sh.breaks.findIndex((b) => v <= b);
   const k = i < 0 ? sh.breaks.length - 1 : i;
+  if (sh.colors) return sh.colors[Math.min(k, sh.colors.length - 1)];
   // spread the classes over the palette when there are fewer than five
   return SHADES[sh.breaks.length === 1 ? SHADES.length - 1 : Math.round((k / (sh.breaks.length - 1)) * (SHADES.length - 1))];
 };
@@ -309,6 +318,7 @@ const classLabels = (sh: Shade) =>
   sh.breaks.map((b, i) => {
     if (i === 0) return sh.whole && b === 1 ? sh.fmt(1) : `up to ${sh.fmt(b)}`;
     const lo = sh.breaks[i - 1];
+    if (b === Infinity) return `over ${sh.fmt(lo)}`;
     return sh.whole ? (lo + 1 === b ? sh.fmt(b) : `${sh.fmt(lo + 1)}–${sh.fmt(b)}`) : `${sh.fmt(lo)}–${sh.fmt(b)}`;
   });
 
@@ -376,7 +386,7 @@ function CoverageMap({ state, names, onPick, selected, province, counts, shade }
   }
   const h = hover ? names.get(hover.key) : null;
   const fill = (k: string) =>
-    shade ? shadeOf(shade, shade.values.get(k) ?? 0) : state[k] === "ok" ? GOOD : state[k] === "bad" ? BAD : CALM;
+    shade ? shadeOf(shade, shade.values.get(k)) : state[k] === "ok" ? GOOD : state[k] === "bad" ? BAD : CALM;
   const order = [...view.muni].sort((a, b) => Number(a.key === selected) - Number(b.key === selected));
   return (
     <div className="ad-map" ref={box} onMouseLeave={() => setHover(null)}>
@@ -385,7 +395,7 @@ function CoverageMap({ state, names, onPick, selected, province, counts, shade }
           const other = province && names.get(m.key)?.province !== province;
           return (
             <path key={m.key} d={m.d} fill={fill(m.key)}
-              className={`ad-map-area${hover?.key === m.key ? " hover" : ""}${selected === m.key ? " sel" : ""}${other ? " other" : ""}${shade && state[m.key] === "bad" ? " gap" : ""}`}
+              className={`ad-map-area${hover?.key === m.key ? " hover" : ""}${selected === m.key ? " sel" : ""}${other ? " other" : ""}${shade && !shade.noGaps && state[m.key] === "bad" ? " gap" : ""}`}
               onMouseMove={(e) => {
                 const r = box.current?.getBoundingClientRect();
                 if (r) setHover({ key: m.key, x: e.clientX - r.left, y: e.clientY - r.top });
@@ -402,18 +412,22 @@ function CoverageMap({ state, names, onPick, selected, province, counts, shade }
           <em className={state[hover.key] ?? "calm"}>
             {state[hover.key] === "ok" ? "At risk · has an activity" : state[hover.key] === "bad" ? "At risk · needs attention" : "Not at risk"}
           </em>
-          {shade && <b className="ad-map-tip-v">{shade.label}: {shade.fmt(shade.values.get(hover.key) ?? 0)}</b>}
+          {shade && (
+            <b className="ad-map-tip-v">
+              {shade.tip ? shade.tip(hover.key) ?? "No data" : `${shade.label}: ${shade.fmt(shade.values.get(hover.key) ?? 0)}`}
+            </b>
+          )}
           <span>{plural(counts.get(hover.key) ?? 0, "activity", "activities")} · click for details</span>
         </div>
       )}
       {shade ? (
         <ul className="ad-key">
           <li className="ad-key-title">{shade.label}:</li>
-          <li><i style={{ background: NONE, border: "1px solid #d5dbd7" }} /> None</li>
-          {classLabels(shade).map((l, i) => (
-            <li key={l}><i style={{ background: shadeOf(shade, shade.breaks[i]) }} /> {l}</li>
+          <li><i style={{ background: NONE, border: "1px solid #d5dbd7" }} /> {shade.noneLabel ?? "None"}</li>
+          {(shade.classNames ?? classLabels(shade)).map((l, i) => (
+            <li key={l}><i style={{ background: shade.colors?.[i] ?? shadeOf(shade, shade.breaks[i]) }} /> {l}</li>
           ))}
-          <li><i className="ad-key-gap" /> At risk, no activity yet</li>
+          {!shade.noGaps && <li><i className="ad-key-gap" /> At risk, no activity yet</li>}
         </ul>
       ) : (
         <ul className="ad-key">
@@ -423,6 +437,52 @@ function CoverageMap({ state, names, onPick, selected, province, counts, shade }
         </ul>
       )}
     </div>
+  );
+}
+
+/** Side panel of the SSL map: provinces from the least to the most self-sufficient, with the projected loss when the
+ * file has it. */
+function SslPanel({ crop, data, picked, onPick }: {
+  crop: string;
+  data: NonNullable<SslData["crops"]["rice"]>;
+  picked: string;
+  onPick: (province: string) => void;
+}) {
+  const rows = Object.values(data.provinces).sort((a, b) => (a.ssl ?? Infinity) - (b.ssl ?? Infinity));
+  const max = Math.max(150, ...rows.map((r) => r.ssl ?? 0));
+  const color = (v: number) => SSL_COLORS[Math.max(0, SSL_BREAKS.findIndex((b) => v <= b))];
+  const short = rows.filter((r) => r.ssl != null && r.ssl < 100).length;
+  return (
+    <>
+      <h3>{crop} self-sufficiency</h3>
+      <p className="ad-sub">
+        {short ? `${short} of ${rows.length} provinces produce less ${crop.toLowerCase()} than they consume.` : "Every province produces what it consumes."}
+        {" "}Click a province to zoom.
+      </p>
+      <ul className="ad-ssl">
+        {rows.map((r) => (
+          <li key={r.label} className={picked && picked !== r.label ? "dim" : ""}>
+            <button onClick={() => onPick(r.label)} aria-pressed={picked === r.label}>
+              <span className="ad-ssl-name">{r.label}</span>
+              <b className="ad-ssl-v">{r.ssl == null ? "no data" : pctText(r.ssl)}</b>
+              <span className="ad-ssl-track" title="The line marks 100%">
+                {r.ssl != null && <span style={{ width: `${(Math.max(0, r.ssl) / max) * 100}%`, background: color(r.ssl) }} />}
+                <i style={{ left: `${(100 / max) * 100}%` }} aria-hidden />
+              </span>
+              <small className="ad-ssl-sub">
+                {r.ssl == null ? "" : r.ssl >= 100 ? <em className="ok">self-sufficient</em> : <em>deficit</em>}
+                {r.final_ssl != null && r.ssl != null && (
+                  <> · after the projected loss {pctText(r.final_ssl)}{r.ssl >= 100 && r.final_ssl < 100 ? " (falls below 100%)" : ""}</>
+                )}
+                {r.standing_ha != null && r.standing_ha > 0 && ` · ${fmtNumber(r.standing_ha, 0)} ha standing`}
+              </small>
+            </button>
+          </li>
+        ))}
+      </ul>
+      <p className="ad-note">SSL {data.ssl_year || ""} from the action-plan workbook
+        {data.standing_as_of ? `; standing crop as of ${data.standing_as_of}` : ""}. The line in each bar marks 100%.</p>
+    </>
   );
 }
 
@@ -549,6 +609,8 @@ export default function ActivitiesDashboard({ geo }: { geo: Gazetteer }) {
   const [open, setOpen] = useState<string | null>(null);
   const [measure, setMeasure] = useState<Measure>("coverage");
   const [item, setItem] = useState(""); // units: one item (activity title), or all
+  const [ssl, setSsl] = useState<SslData | null>(null); // rice / corn self-sufficiency per province
+  const [sslCrop, setSslCrop] = useState<SslCropId>("rice");
   const [openProvs, setOpenProvs] = useState<string[]>([]); // provinces opened in the place list
   const [help, setHelp] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -561,7 +623,10 @@ export default function ActivitiesDashboard({ geo }: { geo: Gazetteer }) {
       .catch((e) => setError(String(e.message ?? e)));
     fetch("/api/public/activities")
       .then((r) => (r.ok ? r.json() : Promise.reject(new Error(`Activities: HTTP ${r.status}`))))
-      .then((d) => setActs(d.activities))
+      .then((d) => {
+        setActs(d.activities);
+        setSsl(d.ssl ?? null);
+      })
       .catch((e) => setError(String(e.message ?? e)));
   }, []);
 
@@ -644,8 +709,28 @@ export default function ActivitiesDashboard({ geo }: { geo: Gazetteer }) {
   }, [relevant]);
   // totals per municipality for the map (an activity in several places is shared evenly between them)
   const items = useMemo(() => [...new Set(relevant.filter((a) => a.units != null).map((a) => a.title))].sort(), [relevant]);
+  const sslNow = measure === "ssl" ? ssl?.crops[sslCrop] ?? null : null;
+  const cropLabel = SSL_CROPS.find((c) => c.id === sslCrop)?.label ?? "Rice";
   const shade: Shade | null = useMemo(() => {
     if (measure === "coverage") return null;
+    if (measure === "ssl") {
+      // every municipality takes its province's value: the figures are provincial
+      const values = new Map<string, number>();
+      for (const g of geo.gazetteer) {
+        const v = sslNow?.provinces[provinceOf(g.area_key)]?.ssl;
+        if (v != null) values.set(g.area_key, v);
+      }
+      return {
+        label: `${cropLabel} self-sufficiency level, SSL ${sslNow?.ssl_year ?? ""} (%)`.replace(" ,", ","), values,
+        breaks: SSL_BREAKS, colors: SSL_COLORS, classNames: SSL_CLASS_LABELS,
+        fmt: (n: number) => `${fmtNumber(n, 1)}%`, whole: false, noneLabel: "No data", noGaps: true,
+        tip: (k: string) => {
+          const r = sslNow?.provinces[provinceOf(k)];
+          if (r?.ssl == null) return null;
+          return `${cropLabel} SSL ${pctText(r.ssl)}${r.final_ssl != null ? ` · after the projected loss ${pctText(r.final_ssl)}` : ""}`;
+        },
+      };
+    }
     const get = (a: Activity) => (measure === "units" ? a.units : measure === "beneficiaries" ? a.beneficiaries : a.budget);
     const values = new Map<string, number>();
     for (const a of relevant) {
@@ -657,7 +742,7 @@ export default function ActivitiesDashboard({ geo }: { geo: Gazetteer }) {
     const fmt = measure === "budget" ? (n: number) => money(n) : (n: number) => fmtNumber(Math.round(n * 10) / 10, n % 1 ? 1 : 0);
     const label = measure === "units" ? (item ? `${item} (units)` : "Units delivered") : measure === "beneficiaries" ? "Beneficiaries" : "Budget";
     return { label, values, breaks: makeBreaks([...values.values()], whole), fmt, whole };
-  }, [measure, item, relevant]);
+  }, [measure, item, relevant, sslNow, cropLabel, geo]);
   const countByArea = useMemo(() => new Map([...actsByArea.entries()].map(([k, v]) => [k, v.length])), [actsByArea]);
   const mapState = useMemo(() => {
     const out: MapState = {};
@@ -925,19 +1010,29 @@ export default function ActivitiesDashboard({ geo }: { geo: Gazetteer }) {
             {/* the map with the details of the place clicked */}
             <section className="ad-card ad-map-card">
               <header>
-                <h2>Where are the places at risk{where}?</h2>
-                <p>Hover a place for a quick look; click it to see its activities. Colour it by coverage or by what was delivered.</p>
+                <h2>{measure === "ssl" ? `How self-sufficient is each province in ${cropLabel.toLowerCase()}?` : <>Where are the places at risk{where}?</>}</h2>
+                <p>Hover a place for a quick look; click it to see its activities. Colour it by coverage, by what was delivered, or by the rice and corn self-sufficiency of each province.</p>
               </header>
               <div className="ad-map-tools">
                 <span className="ad-map-tools-label">Colour the map by</span>
                 <div className="ad-seg" role="radiogroup" aria-label="Colour the map by">
-                  {MEASURES.map((m) => (
+                  {MEASURES.filter((m) => m.id !== "ssl" || ssl).map((m) => (
                     <button key={m.id} role="radio" aria-checked={measure === m.id} className={measure === m.id ? "on" : ""}
                       onClick={() => setMeasure(m.id)}>
                       {m.label}
                     </button>
                   ))}
                 </div>
+                {measure === "ssl" && ssl && (
+                  <div className="ad-seg small" role="radiogroup" aria-label="Crop">
+                    {SSL_CROPS.map((c) => (
+                      <button key={c.id} role="radio" aria-checked={sslCrop === c.id} className={sslCrop === c.id ? "on" : ""}
+                        onClick={() => setSslCrop(c.id)} title={hasSsl(ssl.crops[c.id]) ? undefined : "No figures in the uploaded file"}>
+                        {c.label}{hasSsl(ssl.crops[c.id]) ? "" : " (no data)"}
+                      </button>
+                    ))}
+                  </div>
+                )}
                 {measure === "units" && (
                   <select value={item} onChange={(e) => setItem(e.target.value)} aria-label="Item" className={item ? "on" : ""}>
                     <option value="">All items (added together)</option>
@@ -945,6 +1040,16 @@ export default function ActivitiesDashboard({ geo }: { geo: Gazetteer }) {
                   </select>
                 )}
               </div>
+              {measure === "ssl" && sslNow && (
+                <p className="ad-note">
+                  Self-sufficiency level (SSL {sslNow.ssl_year || "base year"}): how much of the {cropLabel.toLowerCase()} a
+                  province needs it produces itself. 100% = it produces all it consumes; below 100% (red) it relies on supply from
+                  other places; above 100% (green) it has a surplus.
+                </p>
+              )}
+              {measure === "ssl" && ssl && !hasSsl(sslNow) && (
+                <p className="ad-note warn">The uploaded file has no {cropLabel.toLowerCase()} SSL yet, so every province shows as no data.</p>
+              )}
               {measure === "units" && !item && items.length > 1 && (
                 <p className="ad-note">Different items are added together – choose one item to compare places fairly.</p>
               )}
@@ -963,7 +1068,8 @@ export default function ActivitiesDashboard({ geo }: { geo: Gazetteer }) {
                       </div>
                       <div className="ad-panel-tags">
                         {selClass && <ClassDot label={`ENVI: ${className(selClass.class)}`} color={selClass.color} />}
-                        {shade && <span className="ad-tag calm">{shade.label}: {shade.fmt(shade.values.get(selected!) ?? 0)}</span>}
+                        {shade && !shade.tip && <span className="ad-tag calm">{shade.label}: {shade.fmt(shade.values.get(selected!) ?? 0)}</span>}
+                        {shade?.tip && <span className="ad-tag calm">{shade.tip(selected!) ?? `${cropLabel} SSL: no data`}</span>}
                         <span className={`ad-tag ${mapState[selected!] ?? "calm"}`}>
                           {mapState[selected!] === "ok" ? "Has an activity" : mapState[selected!] === "bad" ? "Needs attention" : "Not at risk"}
                         </span>
@@ -975,6 +1081,8 @@ export default function ActivitiesDashboard({ geo }: { geo: Gazetteer }) {
                       )}
                       <button className="ad-link" onClick={() => openInList(selected!)}>Show in the list ›</button>
                     </>
+                  ) : measure === "ssl" && sslNow ? (
+                    <SslPanel crop={cropLabel} data={sslNow} picked={prov} onPick={(p) => { setProv(prov === p ? "" : p); setSelected(null); }} />
                   ) : (
                     <>
                       <h3>Need attention first</h3>

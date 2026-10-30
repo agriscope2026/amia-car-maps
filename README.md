@@ -17,7 +17,8 @@ Administrative Region (DA-RFO-CAR), AMIA Program. It has two parts:
     day; seasonal rainfall one map per month (there are no 10-day or season total maps).
 - **El Niño Action Plan Dashboard:** the El Niño activities of DA and its partners in each municipality (to
   conduct, ongoing, completed, postponed) next to the municipalities at risk on the latest ENVI map, with large
-  figures and charts. Staff enter activities by hand or import them from Excel.
+  figures and charts. Staff enter activities by hand or import them from Excel. The same workbook gives the rice
+  and corn self-sufficiency per province, shown as a *Self-sufficiency (SSL)* map (SSL %, with the projected loss).
 - **Special Farm Weather Outlook and Advisory (tropical cyclone):** made from the latest PAGASA Tropical Cyclone
   Bulletin, with the CAR municipalities under each wind signal on a map, PAGASA's track forecast image and a farm
   advisory, exported as A4 pages and Facebook posts.

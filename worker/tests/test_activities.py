@@ -42,27 +42,43 @@ def test_aliases_dates_and_title_rows():
     assert b["status"] == "to_conduct" and b["hazard"] == "general" and b["start_date"] == "2026-11-01"
 
 
-def test_errors_name_the_row():
+def test_problems_are_warnings_and_the_row_is_kept():
     cols = ["MUNICIPALITY", "ACTIVITY", "STATUS", "START_DATE", "END_DATE", "BENEFICIARIES"]
     data = _xlsx([["Bangued", "Training", "Maybe", None, None, None],
                   ["Atlantis", "Training", "Done", None, None, None],
                   ["Tayum", "Training", "Done", "2026-12-01", "2026-11-01", None],
-                  ["Tayum", "Training", "Done", None, None, "many"],
-                  ["Tayum", "", "Done", None, None, None]], cols)
+                  ["Tayum", "Training", "Done", "soon", None, "many"],
+                  ["Tayum", "", "Done", None, None, None],
+                  ["Tayum", "Seeds", None, None, None, 5]], cols)
     res = activities.parse(data, "bad.xlsx")
-    assert not res["ok"]
-    errs = " | ".join(res["report"]["errors"])
-    assert "Row 2: STATUS 'Maybe'" in errs
-    assert "Row 3: 'Atlantis' is not a CAR municipality" in errs
-    assert "Row 4: the end date" in errs
-    assert "Row 5: 'many' is not a number" in errs
-    assert "Row 6: the ACTIVITY is empty" in errs
+    assert res["ok"], res["report"]["errors"]
+    warns = " | ".join(res["report"]["warnings"])
+    assert "Row 2: STATUS 'Maybe' – saved as To conduct" in warns
+    assert "Row 3: 'Atlantis' is not a CAR municipality" in warns and "row skipped" in warns
+    assert "Row 4: the end date 2026-11-01 is before the start date 2026-12-01" in warns
+    assert "Row 5: 'soon' is not a date" in warns and "Row 5: 'many' is not a number" in warns
+    assert "Row 6: the ACTIVITY is empty – row skipped." in warns
+    assert "Row 7: STATUS is empty – saved as To conduct" in warns
+    by_row = {r["row"]: r for r in res["rows"]}
+    assert sorted(by_row) == [2, 4, 5, 7]                           # rows 3 (no place) and 6 (no activity) skipped
+    assert by_row[2]["status"] == "to_conduct" and by_row[4]["end_date"] is None and by_row[4]["start_date"]
+    assert by_row[5]["start_date"] is None and by_row[5]["beneficiaries"] is None
+    assert res["report"]["warnings"][0].startswith("2 row(s) skipped")
+
+
+def test_no_status_column_and_province_only():
+    data = _xlsx([["Abra", "", "Seed distribution"], ["Narnia", "Bangued; Atlantis", "PISOS"]],
+                 ["PROVINCE", "MUNICIPALITY", "ACTIVITY"])
+    res = activities.parse(data, "x.xlsx")
+    assert res["ok"] and [r["status"] for r in res["rows"]] == ["to_conduct", "to_conduct"]
+    assert len(res["rows"][0]["area_keys"]) == 27 and res["rows"][1]["area_keys"] == ["ABRA|BANGUED"]
+    assert any("No STATUS column" in w for w in res["report"]["warnings"])
 
 
 def test_missing_columns():
     data = _xlsx([["Bangued", "x"]], ["MUNICIPALITY", "NOTES"])
     res = activities.parse(data, "x.xlsx")
-    assert not res["ok"] and "Missing column(s): ACTIVITY, STATUS" in res["report"]["errors"][0]
+    assert not res["ok"] and "Missing column(s): ACTIVITY." in res["report"]["errors"][0]
 
 
 def test_csv():
@@ -79,10 +95,13 @@ def test_whole_car_and_unknown_province():
                   ["Narnia", "All", "x", "Ongoing"],
                   ["Abra", "Bangued; Atlantis", "y", "Ongoing"]], cols)
     res = activities.parse(data, "x.xlsx")
-    errs = " | ".join(res["report"]["errors"])
-    assert "Row 4: PROVINCE 'Narnia' is not a CAR province." in errs
-    assert "Row 5: 'Atlantis' is not a CAR municipality" in errs
-    assert [len(r["area_keys"]) for r in res["rows"]] == [77, 77]
+    warns = " | ".join(res["report"]["warnings"])
+    assert res["ok"]
+    assert "Row 4: PROVINCE 'Narnia' is not a CAR province – ignored." in warns
+    assert "Row 5: 'Atlantis' is not a CAR municipality" in warns
+    # Narnia + All: no known place, so the row is skipped (not spread over the whole CAR); Bangued kept, Atlantis left out
+    assert [len(r["area_keys"]) for r in res["rows"]] == [77, 77, 1]
+    assert "Row 4: no place it can be shown on (x) – row skipped" in warns
 
 
 def test_beneficiary_type_words():
@@ -92,6 +111,7 @@ def test_beneficiary_type_words():
                   ["Bangued", "Seeds", None, "Completed", None, 40],
                   ["Bangued", "Training", None, "Completed", "Barangay", 10]], cols)
     res = activities.parse(data, "list.xlsx")
-    assert [r["beneficiary_type"] for r in res["rows"]] == ["fca", "individual", None]
+    assert [r["beneficiary_type"] for r in res["rows"]][:3] == ["fca", "individual", None]
     assert res["rows"][0]["units"] == 3
-    assert any("BENEFICIARY_TYPE 'Barangay'" in e for e in res["report"]["errors"])
+    assert [r["beneficiary_type"] for r in res["rows"]][3] is None
+    assert any("BENEFICIARY_TYPE 'Barangay' not known" in w for w in res["report"]["warnings"])

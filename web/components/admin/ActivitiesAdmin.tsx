@@ -2,7 +2,10 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { api } from "@/lib/client";
-import { ACTIVITY_STATUSES, BENEFICIARY_TYPES, beneficiariesText, placesSummary, type Activity } from "@/lib/activities";
+import {
+  ACTIVITY_STATUSES, BENEFICIARY_TYPES, beneficiariesText, placesSummary, SSL_CROPS,
+  type Activity, type SslCropId, type SslData,
+} from "@/lib/activities";
 import { fmtNumber } from "@/lib/format";
 import { dateRange, StatusChip } from "@/components/ActivityBits";
 import AreaPicker from "./AreaPicker";
@@ -44,6 +47,208 @@ const fromActivity = (a: Activity): Form => ({
   budget: a.budget?.toString() ?? "", office: a.office ?? "", remarks: a.remarks ?? "",
 });
 
+/** The self-sufficiency (SSL) part of the workbook: SSL per province, rice and corn (and the projected loss when the
+ * file has it), with its warnings. */
+function SslReport({ ssl }: { ssl: any }) {
+  const crops = ["rice", "corn"].filter((c) => ssl.crops?.[c]);
+  const provs: string[] = [...new Set<string>(crops.flatMap((c) => Object.keys(ssl.crops[c].provinces)))].sort();
+  const pct = (v: number | null | undefined) => (v == null ? "–" : `${fmtNumber(v, 1)}%`);
+  return (
+    <div style={{ marginTop: 10 }}>
+      <h3 style={{ margin: "6px 0" }}>Self-sufficiency (sheet “{ssl.sheet}”)</h3>
+      {(ssl.warnings ?? []).map((m: string, i: number) => <p key={i} className="msg warn">{m}</p>)}
+      {ssl.ok ? (
+        <p className="msg ok">
+          SSL figures read: {crops.filter((c) => ssl.crops[c].ok).join(" and ")}. Saving updates the Self-sufficiency (SSL) map
+          of the action plan.
+        </p>
+      ) : (
+        <p className="msg err">No SSL could be read – the SSL map keeps its current figures.</p>
+      )}
+      {provs.length > 0 && (
+        <div className="table-scroll" style={{ marginTop: 6 }}>
+          <table className="data">
+            <thead>
+              <tr>
+                <th>Province</th>
+                {crops.map((c) => <th key={c}>{c === "rice" ? "Rice" : "Corn"} SSL (after the projected loss)</th>)}
+              </tr>
+            </thead>
+            <tbody>
+              {provs.map((p) => (
+                <tr key={p}>
+                  <td>{ssl.crops[crops[0]].provinces[p]?.label ?? p}</td>
+                  {crops.map((c) => {
+                    const r = ssl.crops[c].provinces[p];
+                    return (
+                      <td key={c}>
+                        {r ? (r.ssl == null ? "no data" : r.final_ssl == null
+                          ? `${pct(r.ssl)} (loss not computed${r.effect_error ? `: ${r.effect_error}` : ""})`
+                          : `${pct(r.ssl)} (${pct(r.final_ssl)})`) : "–"}
+                      </td>
+                    );
+                  })}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+}
+
+type SslField = "ssl" | "final_ssl" | "standing_ha" | "yield_loss_mt";
+const SSL_FIELDS: { id: SslField; label: string; hint: string }[] = [
+  { id: "ssl", label: "SSL (%)", hint: "Self-sufficiency level of the base year – the figure on the map" },
+  { id: "final_ssl", label: "SSL after the projected loss (%)", hint: "Final SSL" },
+  { id: "standing_ha", label: "Standing crop (ha)", hint: "Reproductive stage, at risk" },
+  { id: "yield_loss_mt", label: "Potential yield loss (MT)", hint: "Estimated" },
+];
+type SslForm = Record<SslCropId, { ssl_year: string; standing_as_of: string; rows: Record<string, Record<SslField, string>> }>;
+
+const sslFormOf = (data: SslData | null, provinces: string[]): SslForm =>
+  Object.fromEntries(SSL_CROPS.map(({ id }) => {
+    const c = data?.crops[id];
+    const rows = Object.fromEntries(provinces.map((p) => {
+      const r = c?.provinces[p.toUpperCase()];
+      return [p.toUpperCase(), Object.fromEntries(SSL_FIELDS.map((f) => [f.id, r?.[f.id] == null ? "" : String(r[f.id])]))];
+    }));
+    return [id, { ssl_year: c?.ssl_year ?? "", standing_as_of: c?.standing_as_of ?? "", rows }];
+  })) as SslForm;
+
+/** The rice / corn self-sufficiency figures behind the action plan's SSL map, editable in place. An import of the
+ * workbook replaces them; an edit here is kept until the next import. */
+function SslEditor({ geo, refresh }: { geo: Gazetteer; refresh: number }) {
+  const provinces = useMemo(() => [...new Set(geo.gazetteer.map((g) => g.province))].sort(), [geo]);
+  const [data, setData] = useState<SslData | null | undefined>(undefined);
+  const [form, setForm] = useState<SslForm>(() => sslFormOf(null, provinces));
+  const [crop, setCrop] = useState<SslCropId>("rice");
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
+
+  useEffect(() => {
+    api<{ ssl: SslData | null }>("/api/admin/ssl")
+      .then((r) => { setData(r.ssl); setForm(sslFormOf(r.ssl, provinces)); })
+      .catch((e) => setMsg({ ok: false, text: (e as Error).message }));
+  }, [refresh, provinces]);
+
+  const initial = useMemo(() => JSON.stringify(sslFormOf(data ?? null, provinces)), [data, provinces]);
+  const dirty = data !== undefined && JSON.stringify(form) !== initial;
+  const f = form[crop];
+  const setCell = (key: string, field: SslField, v: string) =>
+    setForm((x) => ({ ...x, [crop]: { ...x[crop], rows: { ...x[crop].rows, [key]: { ...x[crop].rows[key], [field]: v } } } }));
+  const setMeta = (k: "ssl_year" | "standing_as_of", v: string) => setForm((x) => ({ ...x, [crop]: { ...x[crop], [k]: v } }));
+  const n = (v: string) => (v.trim() === "" ? null : Number(v.replace(/,/g, "")));
+
+  const save = async () => {
+    setMsg(null);
+    const crops: Record<string, unknown> = {};
+    for (const { id, label } of SSL_CROPS) {
+      const c = form[id];
+      const rows: Record<string, unknown> = {};
+      for (const [key, r] of Object.entries(c.rows)) {
+        const out = Object.fromEntries(SSL_FIELDS.map((fl) => [fl.id, n(r[fl.id])]));
+        const bad = SSL_FIELDS.find((fl) => out[fl.id] !== null && !Number.isFinite(out[fl.id] as number));
+        if (bad) {
+          setCrop(id);
+          return setMsg({ ok: false, text: `${label}, ${key.toLowerCase().replace(/\b\w/g, (m) => m.toUpperCase())}: ${bad.label} is not a number.` });
+        }
+        rows[key] = out;
+      }
+      crops[id] = { ssl_year: c.ssl_year, standing_as_of: c.standing_as_of, provinces: rows };
+    }
+    setBusy(true);
+    try {
+      const r = await api<{ ssl: SslData }>("/api/admin/ssl", { method: "PUT", json: { crops } });
+      setData(r.ssl);
+      setForm(sslFormOf(r.ssl, provinces));
+      setMsg({ ok: true, text: "Saved – the Self-sufficiency (SSL) map of the action plan is updated." });
+    } catch (e) {
+      setMsg({ ok: false, text: (e as Error).message });
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const when = (iso?: string) => (iso ? new Date(iso).toLocaleString("en-PH", { dateStyle: "medium", timeStyle: "short" }) : "");
+  return (
+    <section id="ssl">
+      <h2>Self-sufficiency (SSL) figures</h2>
+      <p className="muted small">
+        The figures behind the <em>Self-sufficiency (SSL)</em> map of the action plan, per province. They come from the sheet
+        “PROJECTED PDN LOSS AND SSL” of the imported workbook; correct them here and click <strong>Save</strong>. The next
+        import of the workbook replaces them.
+        {data?.file ? ` Last import: ${data.file}${data.saved_at ? ` (${when(data.saved_at)})` : ""}.` : ""}
+        {data?.edited_at ? ` Last edited here ${when(data.edited_at)}${data.edited_by ? ` by ${data.edited_by}` : ""}.` : ""}
+      </p>
+      {data === null && <p className="msg warn">No SSL figures yet – import the workbook above, or type them in and save.</p>}
+      <div className="row" style={{ alignItems: "flex-end", gap: 16, flexWrap: "wrap" }}>
+        <div className="seg" role="radiogroup" aria-label="Crop" style={{ minWidth: 200 }}>
+          {SSL_CROPS.map((c) => (
+            <button key={c.id} type="button" role="radio" aria-checked={crop === c.id}
+              className={crop === c.id ? "on" : ""} onClick={() => setCrop(c.id)}>
+              {c.label}
+            </button>
+          ))}
+        </div>
+        <label className="ssl-meta">
+          <span className="small muted">SSL year</span>
+          <input id={`ssl-year-${crop}`} value={f.ssl_year} onChange={(e) => setMeta("ssl_year", e.target.value)}
+            placeholder="2024" style={{ width: 90 }} inputMode="numeric" />
+        </label>
+        <label className="ssl-meta">
+          <span className="small muted">Standing crop as of</span>
+          <input id={`ssl-asof-${crop}`} value={f.standing_as_of} onChange={(e) => setMeta("standing_as_of", e.target.value)}
+            placeholder="October 15" style={{ width: 150 }} />
+        </label>
+      </div>
+      <div className="table-scroll" style={{ marginTop: 10 }}>
+        <table className="data ssl-edit">
+          <thead>
+            <tr>
+              <th>Province</th>
+              {SSL_FIELDS.map((fl) => <th key={fl.id} title={fl.hint}>{fl.label}</th>)}
+              <th title="SSL minus the SSL after the projected loss">Reduction (points)</th>
+            </tr>
+          </thead>
+          <tbody>
+            {provinces.map((p) => {
+              const key = p.toUpperCase();
+              const r = f.rows[key];
+              const ssl = n(r.ssl), fin = n(r.final_ssl);
+              const red = ssl != null && fin != null && Number.isFinite(ssl) && Number.isFinite(fin) ? ssl - fin : null;
+              return (
+                <tr key={key}>
+                  <th scope="row">{p}</th>
+                  {SSL_FIELDS.map((fl) => (
+                    <td key={fl.id}>
+                      <input id={`ssl-${crop}-${key}-${fl.id}`} aria-label={`${p} ${fl.label}`} inputMode="decimal"
+                        value={r[fl.id]} onChange={(e) => setCell(key, fl.id, e.target.value)} style={{ width: 110 }} />
+                    </td>
+                  ))}
+                  <td className={ssl != null && ssl < 100 ? "neg" : ""}>
+                    {red == null ? "–" : fmtNumber(red, 2)}
+                    {ssl != null && Number.isFinite(ssl) && <span className="small muted"> · {ssl >= 100 ? "self-sufficient" : "deficit"}</span>}
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+      <div className="row" style={{ marginTop: 10 }}>
+        <button className="btn" disabled={busy || !dirty} onClick={save}>{busy ? "Saving…" : "Save"}</button>
+        <button className="btn secondary" disabled={busy || !dirty} onClick={() => { setForm(JSON.parse(initial)); setMsg(null); }}>
+          Discard changes
+        </button>
+        {dirty && <span className="small muted">Unsaved changes</span>}
+      </div>
+      {msg && <p className={`msg ${msg.ok ? "ok" : "err"}`}>{msg.text}</p>}
+    </section>
+  );
+}
+
 function Importer({ onSaved }: { onSaved: () => void }) {
   const [file, setFile] = useState<File | null>(null);
   const [replace, setReplace] = useState(false);
@@ -62,7 +267,7 @@ function Importer({ onSaved }: { onSaved: () => void }) {
       if (replace) form.set("replace", "1");
       const r = await api(`/api/admin/activities/import${save ? "?save=1" : ""}`, { method: "POST", body: form });
       setRes(r);
-      if (save && r.saved) onSaved();
+      if (save && (r.saved || r.ssl_saved)) onSaved();
     } catch (e) {
       setError((e as Error).message);
     } finally {
@@ -75,11 +280,14 @@ function Importer({ onSaved }: { onSaved: () => void }) {
     <section>
       <h2>Import from Excel</h2>
       <p className="muted small">
-        One row per activity: MUNICIPALITY, ACTIVITY and STATUS (To conduct, Ongoing, Completed, Postponed), plus optional
+        The action plan workbook: its first sheet lists the activities, and a sheet “PROJECTED PDN LOSS AND SSL” (if present)
+        gives the rice and corn self-sufficiency per province for the SSL map – both are read from the same file. Activities:
+        one row per activity: MUNICIPALITY, ACTIVITY and STATUS (To conduct, Ongoing, Completed, Postponed), plus optional
         PROVINCE, CATEGORY, START_DATE, END_DATE,
         BENEFICIARIES, BUDGET_PHP, OFFICE and REMARKS. For several places, separate them with “;” (e.g. Bangued; Tayum), or
         write All in MUNICIPALITY for every municipality of the PROVINCE(s) given (All in both for the whole CAR). Names are
-        matched like the map inputs. Validate first, then save.
+        matched like the map inputs. Validate first, then save. Missing or unreadable details are warnings (named by row): the
+        row is still imported with that detail empty; only rows without an activity or a place are skipped.
       </p>
       <div className="row">
         <input
@@ -101,11 +309,21 @@ function Importer({ onSaved }: { onSaved: () => void }) {
         <button className="btn secondary" disabled={!file || busy} onClick={() => send(false)}>
           Validate
         </button>
-        <button className="btn" disabled={!file || busy || !res?.ok || res?.saved > 0} onClick={() => send(true)}>
+        <button className="btn" disabled={!file || busy || !(res?.ok || res?.ssl?.ok) || res?.saved > 0 || res?.ssl_saved}
+          onClick={() => send(true)}>
           {replace ? "Save and replace" : "Save"}
         </button>
       </div>
       {error && <p className="msg err">{error}</p>}
+      {res && (res.saved > 0 || res.ssl_saved) && (
+        <p className="msg ok">
+          Saved{res.saved > 0 ? ` ${res.saved} activities` : ""}{res.saved > 0 && res.ssl_saved ? " and" : ""}
+          {res.ssl_saved ? " the self-sufficiency (SSL) figures – the SSL map of the action plan is updated" : ""}.
+          {!res.ok && res.ssl_saved ? " The activity rows were not saved: fix the errors below and import again." : ""}
+          {res.ok && res.ssl && !res.ssl.ok ? " The SSL sheet was not saved (see below)." : ""}
+        </p>
+      )}
+      {res?.ssl && <SslReport ssl={res.ssl} />}
       {rep && (
         <div style={{ marginTop: 8 }}>
           {(rep.errors ?? []).map((m: string, i: number) => (
@@ -114,9 +332,9 @@ function Importer({ onSaved }: { onSaved: () => void }) {
           {(rep.warnings ?? []).map((m: string, i: number) => (
             <p key={i} className="msg warn">{m}</p>
           ))}
-          {res.ok && (
+          {res.ok && !res.saved && (
             <p className="msg ok">
-              {res.saved ? `Saved ${res.saved} activities.` : `Valid: ${res.count} activities in ${rep.municipalities} municipalities`}
+              {`Activities valid: ${res.count} activities in ${rep.municipalities} municipalities`}
               {!res.saved &&
                 ` (${ACTIVITY_STATUSES.map((s) => `${rep.by_status?.[s.id] ?? 0} ${s.label.toLowerCase()}`).join(", ")}).`}
             </p>
@@ -154,6 +372,7 @@ function Importer({ onSaved }: { onSaved: () => void }) {
 }
 
 export default function ActivitiesAdmin({ geo }: { geo: Gazetteer }) {
+  const [sslKey, setSslKey] = useState(0); // reloads the SSL table after an import
   const [list, setList] = useState<Activity[] | null>(null);
   const [form, setForm] = useState<Form>(EMPTY);
   const [editing, setEditing] = useState<string | null>(null);
@@ -314,7 +533,9 @@ export default function ActivitiesAdmin({ geo }: { geo: Gazetteer }) {
         </form>
       </section>
 
-      <Importer onSaved={load} />
+      <Importer onSaved={() => { load(); setSslKey((k) => k + 1); }} />
+
+      <SslEditor geo={geo} refresh={sslKey} />
 
       <section>
         <h2>Activities {list ? `(${list.length})` : ""}</h2>

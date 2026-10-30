@@ -364,11 +364,24 @@ Two ways to enter them:
    too). The line below the list says what is chosen, e.g. "Abra (all 27) · Benguet: La Trinidad, Tublay". Fill in
    the rest and click **Add activity**. The places, status and map stay filled in for the next entry. In the list below, change a status straight from its drop-down (e.g. *To conduct*
    → *Ongoing*), or use **Edit** / **Delete**.
-2. **From Excel:** click **Download template**, fill in one row per activity (delete the two example rows), then
-   **Validate** and **Save**. Names are matched like the map inputs. For several places, separate them with `;` in one
+2. **From Excel:** click **Download template**, fill in one row per activity in sheet **DATA** (delete the example
+   rows), then **Validate** and **Save**. Names are matched like the map inputs.
+   - **Dropdowns:** PROVINCE, MUNICIPALITY (the towns of the province chosen in the same row), ACTIVITY, CATEGORY,
+     STATUS, MAP, UNIT_OF_MEASURE, BENEFICIARY_TYPE (*Individual farmers* or *Farmer group (FCA)*), FUND_SOURCE and
+     OFFICE. Their values are in sheet **LISTS** – type a new office, activity or category at the bottom of its list
+     and it appears in the dropdown. STATUS, MAP and BENEFICIARY_TYPE only take listed values; the others warn and
+     then accept a new value (e.g. `Bangued; Tayum`). Numbers and dates are checked as you type, and a red cell marks
+     a missing STATUS or place in a row that has an activity.
+   - **Optional columns:** BARANGAY, UNIT_OF_MEASURE (what one unit is: unit, bag, kg …) and FUND_SOURCE are kept
+     with the activity's remarks (e.g. "Unit: bag · Fund source: QRF").
+   - **Status words** such as *for construction*, *for distribution* or *for release* are read as *To conduct*. For several places, separate them with `;` in one
    cell (`Bangued; Tayum`); for whole provinces write `All` in MUNICIPALITY and the province(s) in PROVINCE
-   (`Abra; Benguet`); `All` in both means the whole CAR. Each row stays one activity. Errors name the spreadsheet row, and nothing is saved until the whole file is
-   valid. Tick *Replace all current activities* to upload a complete master list instead of adding to the current one.
+   (`Abra; Benguet`); `All` in both means the whole CAR. Each row stays one activity. The import is not strict: a missing or unreadable detail – no status
+   (saved as *To conduct*), no or a wrong date, a number that is not a number, an unknown map or beneficiary type, an
+   unknown town in a list (left out), no municipality (the whole province is used) – is a **yellow warning** naming the
+   spreadsheet row, and the row is still imported with that detail left empty. Only a row with no activity, or with no
+   place that can be shown on the map, is skipped (also listed). Fix the warnings in the file when you can and import
+   again with *Replace all current activities*. Tick *Replace all current activities* to upload a complete master list instead of adding to the current one.
 
 Saved activities appear at once on the public **El Niño Action Plan Dashboard** (the *Action Plan* button). It takes
 the latest published El Niño Vulnerability Index (ENVI) map and shows how many municipalities are at risk, how many of them have an activity and
@@ -376,6 +389,37 @@ which have none yet, with charts by status, province, category and month. Visito
 count as "at risk" (by default High and Very High). An activity counts as covering each of its municipalities unless it is *Postponed*; the figures for
 farmers and budget count each activity once, in full. The activities, including
 beneficiaries and budget, are public.
+
+### Self-sufficiency (SSL) map
+
+The same workbook also feeds the **Self-sufficiency (SSL)** map of the action plan. Keep the sheet
+**PROJECTED PDN LOSS AND SSL** in the file you import (the template has it): its RICE COMMODITY and CORN COMMODITY tables
+give, per province, the **SELF SUFFICIENCY LEVEL (SSL) (%)** of the base year – the figure the map shows – and the
+projected loss (standing crop at the reproductive stage, potential yield loss, final SSL, Effect to SSL). You upload
+**one file**; the import reads both parts:
+
+- **Found by its headers**, not by fixed cells – rows and columns may move, title rows are fine. Mt. Province can be
+  written MP. SSL cells formatted as % (e.g. 143.49 %) are read as percent.
+- **Validate** shows the SSL part on its own: a table of the six provinces (SSL, and the SSL after the projected loss)
+  for rice and corn, with warnings, e.g. *Corn: the projected loss … could not be read (the file shows #DIV/0!)* when
+  the harvested, annual target or total production utilization of corn are still blank – the map still shows the SSL.
+- **Save** stores whichever part is valid: a readable SSL sheet updates the SSL map even while some activity rows
+  still need fixing (they are then not saved – fix them and import again), and the other way round. A file without the
+  SSL sheet leaves the SSL map as it is.
+- **Edit in place:** the section **Self-sufficiency (SSL) figures** below the import shows the stored figures per
+  province – SSL (%), SSL after the projected loss (%), standing crop (ha) and potential yield loss (MT) – for rice and
+  corn (switch at the top), with the SSL year and the "standing crop as of" date. Correct a cell and click **Save**:
+  the public map updates at once and the reduction is recomputed. **Discard changes** goes back to the stored figures.
+  The next import of the workbook replaces the edits; the page says when the figures were last imported and edited.
+
+On the public dashboard, *Colour the map by → Self-sufficiency (SSL)* shades every province by its SSL, with a
+**Rice | Corn** switch. 100 % means the province produces all the rice (or corn) it consumes. The classes are fixed
+and centred on 100 % – red below (below 50 %, 50–80 %, 80–100 %: the province relies on supply from elsewhere), green
+above (100–150 %, over 150 %: surplus) – so maps compare between crops and uploads; a crop without figures shows as
+*no data*, with a note. The side panel lists the provinces from the least to the most self-sufficient, marks each
+*deficit* or *self-sufficient*, and adds the SSL after the projected loss when the file has it (with *falls below
+100 %* when the loss would end self-sufficiency); clicking one zooms to it. Hovering a municipality shows its province's
+figures.
 
 ## Audit log
 

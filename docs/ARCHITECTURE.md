@@ -124,7 +124,10 @@ Screenshots are in [`docs/img/`](img/).
     warnings, unmatched names with suggestions and "assign to") → live map preview → save draft.
   - The **version page** has: map, text editing (with "Generate automatically" for recommendations), export
     job progress and label check, downloads, publish/unpublish.
-  - There are also **Activities** (manual entry and Excel import through the worker's `/activities/parse`),
+  - There are also **Activities** (manual entry and Excel import through the worker's `/activities/parse`; the
+    same workbook's sheet "PROJECTED PDN LOSS AND SSL" is read by `worker/agriclimate/ssl.py` and stored as the
+    app setting `ssl` – rice / corn self-sufficiency per province for the action plan's *Self-sufficiency (SSL)*
+    map colouring: the base-year SSL per province, with the projected loss when computed),
     **Reference data** (crops, irrigation) and **Audit log** pages.
 
 ## 4. Open questions (§12): assumptions until confirmed

@@ -105,21 +105,26 @@ def template(kind: str, period_start: str = "2026-10", period_end: str = "2027-0
             df[c] = None
         return TEMPLATE_INFO[kind][0], _xlsx(df, TEMPLATE_INFO[kind][1])
     if kind == "activities":
-        from . import activities
-        df = pd.DataFrame(activities.EXAMPLES, columns=activities.TEMPLATE_COLUMNS)
-        data = _xlsx(df, activities.TEMPLATE_NOTES)
-        from openpyxl import load_workbook
-        wb = load_workbook(io.BytesIO(data))
-        ws = wb["DATA"]
-        for col, width in zip("ABCDEFGHIJKLM", (14, 22, 44, 12, 22, 13, 13, 13, 18, 14, 14, 24, 36)):
-            ws.column_dimensions[col].width = width
-        # dropdowns: STATUS and BENEFICIARY_TYPE
-        from openpyxl.worksheet.datavalidation import DataValidation
-        for col, values in (("F", "To conduct,Ongoing,Completed,Postponed"), ("I", "Individual,FCA")):
-            dv = DataValidation(type="list", formula1=f'"{values}"', allow_blank=True, showErrorMessage=True,
-                                error="Choose a value from the list.")
-            ws.add_data_validation(dv)
-            dv.add(f"{col}2:{col}1000")
+        # DATA (dropdowns from LISTS), LISTS, README, and the rice / corn self-sufficiency sheet for the SSL map
+        from datetime import date
+        from openpyxl import Workbook
+        from . import activities, activities_workbook
+        from .ssl import add_template_sheet
+        ben = {"Individual": "Individual farmers", "FCA": "Farmer group (FCA)"}
+        rows = []
+        for e in activities.EXAMPLES:
+            r = dict(zip(activities.TEMPLATE_COLUMNS, e))
+            rows.append({"PROVINCE": r["PROVINCE"], "MUNICIPALITY": r["MUNICIPALITY"], "ACTIVITY": r["ACTIVITY"],
+                         "CATEGORY": r["CATEGORY"], "STATUS": r["STATUS"], "NO_OF_UNITS": r["NO. OF UNITS"] or None,
+                         "UNIT_OF_MEASURE": "unit" if r["NO. OF UNITS"] else None,
+                         "START_DATE": date.fromisoformat(r["START_DATE"]) if r["START_DATE"] else None,
+                         "END_DATE": date.fromisoformat(r["END_DATE"]) if r["END_DATE"] else None,
+                         "BENEFICIARY_TYPE": ben.get(r["BENEFICIARY_TYPE"]), "BENEFICIARIES": r["BENEFICIARIES"],
+                         "BUDGET_PHP": r["BUDGET_PHP"], "OFFICE": r["OFFICE"], "REMARKS": r["REMARKS"]})
+        wb = Workbook()
+        wb.remove(wb.active)
+        activities_workbook.build(wb, rows)
+        add_template_sheet(wb)
         buf = io.BytesIO()
         wb.save(buf)
         return "activities_template.xlsx", buf.getvalue()

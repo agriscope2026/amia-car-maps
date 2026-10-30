@@ -243,3 +243,52 @@ export function coverage(vulnerable: string[], acts: Activity[]): Coverage {
     budget,
   };
 }
+
+// ------------------------------------------------------------ self-sufficiency ---
+
+/** Rice / corn self-sufficiency (SSL) of a province, from the sheet "PROJECTED PDN LOSS AND SSL" of the activities
+ * workbook. SSL figures are in % (100 % = the province produces what it consumes). The map shows `ssl`, the
+ * "SELF SUFFICIENCY LEVEL (SSL) (%)" of the base year; `final_ssl` / `effect` are the projected loss, when computed. */
+export interface SslRow {
+  label: string;
+  ssl: number | null; // base-year SSL, %
+  final_ssl: number | null; // SSL after the projected production loss, %
+  effect: number | null; // Effect to SSL (% reduction)
+  standing_ha: number | null; // standing crop at risk (reproductive stage), ha
+  yield_loss_mt: number | null; // estimated potential yield loss, MT
+  harvested_mt?: number | null;
+  target_mt?: number | null;
+  production_mt?: number | null;
+  effect_error?: string; // e.g. "#DIV/0!" when the file could not compute it
+}
+export interface SslCrop {
+  provinces: Record<string, SslRow>; // key: province in upper case, e.g. "MOUNTAIN PROVINCE"
+  car: SslRow | null;
+  standing_as_of: string; // e.g. "October 15"
+  ssl_year: string; // base year of the SSL, e.g. "2024"
+  ok: boolean;
+}
+export interface SslData {
+  file: string;
+  sheet: string;
+  saved_at?: string; // last import of the workbook
+  edited_at?: string; // last edit in the admin page
+  edited_by?: string; // staff only (not in the public API)
+  crops: Partial<Record<"rice" | "corn", SslCrop>>;
+}
+export const SSL_CROPS = [
+  { id: "rice", label: "Rice" },
+  { id: "corn", label: "Corn" },
+] as const;
+export type SslCropId = (typeof SSL_CROPS)[number]["id"];
+/** Classes of the SSL map, by the self-sufficiency level (%): fixed and centred on 100 % (the province produces what
+ * it consumes) – reds below, greens above – so issues and crops compare. */
+export const SSL_BREAKS = [50, 80, 100, 150, Infinity];
+export const SSL_COLORS = ["#b2182b", "#ef8a62", "#fddbc7", "#a6dba0", "#1b7837"];
+export const SSL_CLASS_LABELS = ["below 50%", "50–80%", "80–100%", "100–150%", "over 150%"];
+/** Does the crop have any SSL figure (older uploads flagged availability by the projected loss instead)? */
+export const hasSsl = (c: { provinces: Record<string, { ssl: number | null }> } | null | undefined) =>
+  !!c && Object.values(c.provinces).some((r) => r.ssl != null);
+
+/** The province key of a municipality key: "ABRA|BANGUED" → "ABRA". */
+export const provinceOf = (areaKey: string) => areaKey.split("|")[0];
